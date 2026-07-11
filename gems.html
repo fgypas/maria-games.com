@@ -24,21 +24,22 @@
   .gem {
     border-radius: 50%;
     cursor: pointer;
-    transition: transform 0.1s ease;
     box-shadow: inset -3px -4px 6px rgba(0,0,0,0.25), inset 3px 4px 6px rgba(255,255,255,0.35);
   }
+  /* Movement is animated with the translate/scale properties so the
+     rotated diamond shape (g2) keeps its transform. */
   .g0 { background: #e2707a; }
   .g1 { background: #f2c94c; border-radius: 22%; }
   .g2 { background: #6fcf7c; border-radius: 22%; transform: rotate(45deg) scale(0.82); }
-  .g2.selected, .g2.pop { transform: rotate(45deg) scale(0.82); }
   .g3 { background: #4cc9f0; }
   .g4 { background: #b388ff; border-radius: 50% 50% 22% 22%; }
   .g5 { background: #f2994a; border-radius: 22% 50% 22% 50%; }
-  .gem.selected { outline: 3px solid #fff; outline-offset: 1px; }
-  .gem.pop { animation: gempop 0.18s ease; }
-  @keyframes gempop { 0% { opacity: 0; scale: 0.4; } 100% { opacity: 1; scale: 1; } }
-  .gem.shake { animation: gemshake 0.25s ease; }
-  @keyframes gemshake { 0%,100% { translate: 0; } 25% { translate: -4px; } 75% { translate: 4px; } }
+  .gem.selected { outline: 3px solid #fff; outline-offset: 1px; scale: 1.12; }
+  .gem.burst { animation: gemburst 0.24s ease forwards; }
+  @keyframes gemburst {
+    35%  { scale: 1.35; filter: brightness(1.8); }
+    100% { scale: 0.1; opacity: 0; filter: brightness(2.4); }
+  }
   #message { text-align: center; font-weight: 700; margin-top: 12px; min-height: 1.4em; color: var(--accent-dark); font-size: 1.05rem; }
 </style>
 </head>
@@ -129,13 +130,12 @@
     } while (!hasMove());
   }
 
-  function render(popIdxs) {
+  function render() {
     boardEl.innerHTML = '';
     for (let i = 0; i < N * N; i++) {
       const d = document.createElement('div');
       d.className = 'gem g' + board[i];
       if (i === selected) d.classList.add('selected');
-      if (popIdxs && popIdxs.has(i)) d.classList.add('pop');
       d.dataset.i = i;
       boardEl.appendChild(d);
     }
@@ -150,22 +150,44 @@
     }
   }
 
+  // Returns how far each gem fell (in cells) so the drop can be animated
   function gravityRefill() {
-    const fresh = new Set();
+    const moves = [];
     for (let c = 0; c < N; c++) {
-      const stack = [];
-      for (let r = N - 1; r >= 0; r--) if (board[r * N + c] >= 0) stack.push(board[r * N + c]);
+      let write = N - 1;
       for (let r = N - 1; r >= 0; r--) {
-        const v = stack[N - 1 - r];
-        if (v === undefined) {
-          board[r * N + c] = Math.floor(Math.random() * TYPES);
-          fresh.add(r * N + c);
-        } else {
-          board[r * N + c] = v;
+        if (board[r * N + c] >= 0) {
+          if (write !== r) {
+            board[write * N + c] = board[r * N + c];
+            moves.push({ i: write * N + c, dy: write - r });
+          }
+          write--;
         }
       }
+      // Fresh gems drop in together from above the top edge
+      for (let r = write; r >= 0; r--) {
+        board[r * N + c] = Math.floor(Math.random() * TYPES);
+        moves.push({ i: r * N + c, dy: write + 1 });
+      }
     }
-    return fresh;
+    return moves;
+  }
+
+  function animateFalls(moves) {
+    if (moves.length === 0) return;
+    const pitch = boardEl.children[N].offsetTop - boardEl.children[0].offsetTop;
+    moves.forEach(({ i, dy }) => {
+      const el = boardEl.children[i];
+      el.style.transition = 'none';
+      el.style.translate = '0 ' + (-dy * pitch) + 'px';
+    });
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      moves.forEach(({ i }) => {
+        const el = boardEl.children[i];
+        el.style.transition = 'translate 0.24s cubic-bezier(0.3, 0.9, 0.4, 1.15)';
+        el.style.translate = '0 0';
+      });
+    }));
   }
 
   function cascade(mult) {
@@ -182,30 +204,46 @@
     score += m.size * 10 * mult;
     updateHud();
     m.forEach(i => board[i] = -1);
-    const cells = boardEl.children;
-    m.forEach(i => { cells[i].style.opacity = '0'; });
+    m.forEach(i => boardEl.children[i].classList.add('burst'));
     setTimeout(() => {
-      const fresh = gravityRefill();
-      render(fresh);
-      setTimeout(() => cascade(mult + 1), 140);
-    }, 180);
+      const moves = gravityRefill();
+      render();
+      animateFalls(moves);
+      setTimeout(() => cascade(mult + 1), 280);
+    }, 240);
+  }
+
+  // Slide the two gems into each other's places
+  function animateSwap(a, b, done) {
+    const ea = boardEl.children[a], eb = boardEl.children[b];
+    const dx = eb.offsetLeft - ea.offsetLeft, dy = eb.offsetTop - ea.offsetTop;
+    ea.style.transition = eb.style.transition = 'translate 0.16s ease';
+    ea.style.zIndex = '1';
+    ea.style.translate = dx + 'px ' + dy + 'px';
+    eb.style.translate = (-dx) + 'px ' + (-dy) + 'px';
+    setTimeout(done, 170);
   }
 
   function trySwap(a, b) {
     if (busy || !adjacent(a, b)) return;
+    busy = true;
     selected = -1;
     [board[a], board[b]] = [board[b], board[a]];
     if (findMatches(board).size === 0) {
+      // Not a valid move: slide over, then slide back
       [board[a], board[b]] = [board[b], board[a]];
-      render();
-      boardEl.children[a].classList.add('shake');
-      boardEl.children[b].classList.add('shake');
+      animateSwap(a, b, () => {
+        boardEl.children[a].style.translate = '0 0';
+        boardEl.children[b].style.translate = '0 0';
+        setTimeout(() => { render(); busy = false; }, 170);
+      });
       return;
     }
-    busy = true;
     msgEl.textContent = '';
-    render();
-    cascade(1);
+    animateSwap(a, b, () => {
+      render();
+      cascade(1);
+    });
   }
 
   // Tap-tap or swipe
