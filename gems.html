@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gems — Maria's Games</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💎</text></svg>">
+<link rel="stylesheet" href="style.css">
+<style>
+  #wrap { display: flex; gap: 16px; align-items: flex-start; justify-content: center; }
+  canvas#game {
+    background: #241f2e;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    width: min(60vw, 280px);
+    height: auto;
+    touch-action: none;
+  }
+  #side { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  canvas#next { background: #241f2e; border-radius: 10px; width: 90px; height: 90px; }
+  #side .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: #8a7a6a; }
+  #message { text-align: center; font-weight: 700; margin-top: 12px; min-height: 1.4em; color: var(--accent-dark); font-size: 1.05rem; }
+  #touch {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    width: min(92vw, 420px);
+    margin-top: 14px;
+  }
+  #touch button {
+    font-size: 1.5rem;
+    padding: 14px 0;
+    border: none;
+    border-radius: 12px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  #touch button:active { background: var(--soft); }
+</style>
+</head>
+<body>
+<header class="site">
+  <h1><a href="index.html">🎲 Maria's Games</a></h1>
+  <a class="back" href="index.html">← All games</a>
+</header>
+<main>
+  <div class="hud">
+    <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+    <div class="stat"><div class="label">Gems</div><div class="value" id="gems">0</div></div>
+    <div class="stat"><div class="label">Level</div><div class="value" id="level">1</div></div>
+    <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+  </div>
+  <div id="wrap">
+    <canvas id="game" width="200" height="400"></canvas>
+    <div id="side">
+      <div class="label">Next</div>
+      <canvas id="next" width="80" height="80"></canvas>
+      <button class="btn" id="start">Start</button>
+      <button class="btn secondary" id="pause">Pause</button>
+    </div>
+  </div>
+  <div id="message"></div>
+  <div id="touch">
+    <button id="t-left">⬅️</button>
+    <button id="t-rotate">🔄</button>
+    <button id="t-right">➡️</button>
+    <button id="t-drop">⬇️</button>
+  </div>
+  <p class="controls-hint">Clear lines to set off cascades and collect the gems 💎<br>
+  Arrows to move (hold to slide), ↑ to rotate, space to drop.
+  Mouse: move to steer, click to rotate, right-click to drop.</p>
+</main>
+<footer class="site">Made for Maria ❤️</footer>
+<script>
+(function () {
+  const COLS = 10, ROWS = 20, SIZE = 20;
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const nextCanvas = document.getElementById('next');
+  const nctx = nextCanvas.getContext('2d');
+  const msgEl = document.getElementById('message');
+  const scoreEl = document.getElementById('score');
+  const gemsEl = document.getElementById('gems');
+  const levelEl = document.getElementById('level');
+  const bestEl = document.getElementById('best');
+
+  const SHAPES = {
+    I: { color: '#5ad0e0', cells: [[0,1],[1,1],[2,1],[3,1]], size: 4 },
+    O: { color: '#f2c94c', cells: [[0,0],[1,0],[0,1],[1,1]], size: 2 },
+    T: { color: '#bb6bd9', cells: [[1,0],[0,1],[1,1],[2,1]], size: 3 },
+    S: { color: '#6fcf7c', cells: [[1,0],[2,0],[0,1],[1,1]], size: 3 },
+    Z: { color: '#eb5757', cells: [[0,0],[1,0],[1,1],[2,1]], size: 3 },
+    J: { color: '#5b7fe0', cells: [[0,0],[0,1],[1,1],[2,1]], size: 3 },
+    L: { color: '#f2994a', cells: [[2,0],[0,1],[1,1],[2,1]], size: 3 },
+  };
+  const NAMES = Object.keys(SHAPES);
+  const GEM_COLORS = ['#ff5c8a', '#ffd166', '#06d6a0', '#4cc9f0', '#b388ff'];
+
+  // Board cells are null or { c: blockColor, g: gemColor|null }
+  let board, piece, nextPiece, score, gems, lines, level, best;
+  let running = false, paused = false, dropTimer = null;
+
+  best = Number(localStorage.getItem('mariagemsbest') || 0);
+  bestEl.textContent = best;
+
+  function makePiece(name) {
+    const s = SHAPES[name];
+    return {
+      name, color: s.color, size: s.size,
+      cells: s.cells.map(c => c.slice()),
+      // ~1 gem per piece on average, sparkling in a random color
+      gems: s.cells.map(() =>
+        Math.random() < 0.28 ? GEM_COLORS[Math.floor(Math.random() * GEM_COLORS.length)] : null),
+      x: Math.floor((COLS - s.size) / 2), y: 0,
+    };
+  }
+
+  function randomName() { return NAMES[Math.floor(Math.random() * NAMES.length)]; }
+
+  function spawn() {
+    piece = nextPiece || makePiece(randomName());
+    nextPiece = makePiece(randomName());
+    drawNext();
+    if (collides(piece.cells, piece.x, piece.y)) {
+      gameOver();
+      return false;
+    }
+    return true;
+  }
+
+  function collides(cells, px, py) {
+    return cells.some(([cx, cy]) => {
+      const x = px + cx, y = py + cy;
+      return x < 0 || x >= COLS || y >= ROWS || (y >= 0 && board[y][x]);
+    });
+  }
+
+  function rotate() {
+    if (piece.name === 'O') return;
+    const rotated = piece.cells.map(([cx, cy]) => [piece.size - 1 - cy, cx]);
+    for (const dx of [0, -1, 1, -2, 2]) {
+      if (!collides(rotated, piece.x + dx, piece.y)) {
+        piece.cells = rotated;
+        piece.x += dx;
+        return;
+      }
+    }
+  }
+
+  function moveX(dx) {
+    if (!collides(piece.cells, piece.x + dx, piece.y)) piece.x += dx;
+  }
+
+  function step() {
+    if (!collides(piece.cells, piece.x, piece.y + 1)) {
+      piece.y++;
+      return true;
+    }
+    lock();
+    return false;
+  }
+
+  function hardDrop() {
+    while (step()) {}
+  }
+
+  // After a clear, every block falls straight down to fill gaps below it.
+  // That is what sets off the cascades.
+  function applyGravity() {
+    for (let c = 0; c < COLS; c++) {
+      const stack = [];
+      for (let r = ROWS - 1; r >= 0; r--) if (board[r][c]) stack.push(board[r][c]);
+      for (let r = ROWS - 1; r >= 0; r--) board[r][c] = stack[ROWS - 1 - r] || null;
+    }
+  }
+
+  function resolveClears() {
+    let chain = 0, totalLines = 0, totalGems = 0;
+    while (true) {
+      const full = [];
+      for (let r = 0; r < ROWS; r++) if (board[r].every(v => v)) full.push(r);
+      if (full.length === 0) break;
+      chain++;
+      let gemsHere = 0;
+      full.forEach(r => {
+        board[r].forEach(cell => { if (cell.g) gemsHere++; });
+        board[r] = new Array(COLS).fill(null);
+      });
+      totalLines += full.length;
+      totalGems += gemsHere;
+      score += [0, 100, 300, 500, 800][Math.min(full.length, 4)] * level * chain;
+      score += gemsHere * 40 * chain;
+      applyGravity();
+    }
+    if (totalLines > 0) {
+      lines += totalLines;
+      gems += totalGems;
+      const newLevel = Math.floor(lines / 10) + 1;
+      if (newLevel !== level) {
+        level = newLevel;
+        restartTimer();
+      }
+      if (chain > 1) msgEl.textContent = '💎 Cascade x' + chain + '!';
+      else if (totalGems > 0) msgEl.textContent = '💎 +' + totalGems + ' gem' + (totalGems > 1 ? 's' : '');
+      else msgEl.textContent = '';
+      updateHud();
+    }
+  }
+
+  function lock() {
+    piece.cells.forEach(([cx, cy], i) => {
+      const y = piece.y + cy, x = piece.x + cx;
+      if (y >= 0) board[y][x] = { c: piece.color, g: piece.gems[i] };
+    });
+    resolveClears();
+    spawn();
+  }
+
+  function updateHud() {
+    scoreEl.textContent = score;
+    gemsEl.textContent = gems;
+    levelEl.textContent = level;
+    if (score > best) {
+      best = score;
+      localStorage.setItem('mariagemsbest', best);
+      bestEl.textContent = best;
+    }
+  }
+
+  function drawCell(c, x, y, color, size) {
+    c.fillStyle = color;
+    c.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  }
+
+  function drawGem(c, x, y, gemColor, size) {
+    const cx = x * size + size / 2, cy = y * size + size / 2, r = size * 0.32;
+    c.beginPath();
+    c.moveTo(cx, cy - r);
+    c.lineTo(cx + r, cy);
+    c.lineTo(cx, cy + r);
+    c.lineTo(cx - r, cy);
+    c.closePath();
+    c.fillStyle = gemColor;
+    c.fill();
+    c.strokeStyle = 'rgba(255,255,255,0.85)';
+    c.lineWidth = 1;
+    c.stroke();
+    // little sparkle
+    c.fillStyle = 'rgba(255,255,255,0.9)';
+    c.fillRect(cx - r * 0.35, cy - r * 0.45, 2, 2);
+  }
+
+  function ghostY() {
+    let y = piece.y;
+    while (!collides(piece.cells, piece.x, y + 1)) y++;
+    return y;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = board[r][c];
+        if (cell) {
+          drawCell(ctx, c, r, cell.c, SIZE);
+          if (cell.g) drawGem(ctx, c, r, cell.g, SIZE);
+        }
+      }
+    }
+    if (piece) {
+      const gy = ghostY();
+      if (gy > piece.y) {
+        ctx.strokeStyle = piece.color;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.45;
+        piece.cells.forEach(([cx, cy]) => {
+          if (gy + cy >= 0)
+            ctx.strokeRect((piece.x + cx) * SIZE + 2, (gy + cy) * SIZE + 2, SIZE - 4, SIZE - 4);
+        });
+        ctx.globalAlpha = 1;
+      }
+      piece.cells.forEach(([cx, cy], i) => {
+        if (piece.y + cy >= 0) {
+          drawCell(ctx, piece.x + cx, piece.y + cy, piece.color, SIZE);
+          if (piece.gems[i]) drawGem(ctx, piece.x + cx, piece.y + cy, piece.gems[i], SIZE);
+        }
+      });
+    }
+  }
+
+  function drawNext() {
+    nctx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+    const s = SHAPES[nextPiece.name];
+    const cell = 16;
+    const offX = (nextCanvas.width - s.size * cell) / 2 / cell;
+    const offY = (nextCanvas.height - 2 * cell) / 2 / cell - (s.size === 2 ? 0 : 0.5);
+    nextPiece.cells.forEach(([cx, cy], i) => {
+      drawCell(nctx, cx + offX, cy + offY, nextPiece.color, cell);
+      if (nextPiece.gems[i]) drawGem(nctx, cx + offX, cy + offY, nextPiece.gems[i], cell);
+    });
+  }
+
+  function tick() {
+    if (!running || paused) return;
+    step();
+    draw();
+  }
+
+  function restartTimer() {
+    clearInterval(dropTimer);
+    const speed = Math.max(90, 700 - (level - 1) * 60);
+    dropTimer = setInterval(tick, speed);
+  }
+
+  function startGame() {
+    board = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
+    score = 0; gems = 0; lines = 0; level = 1;
+    nextPiece = null;
+    running = true; paused = false;
+    msgEl.textContent = '';
+    document.getElementById('pause').textContent = 'Pause';
+    updateHud();
+    spawn();
+    draw();
+    restartTimer();
+  }
+
+  function gameOver() {
+    running = false;
+    clearInterval(dropTimer);
+    msgEl.textContent = '💔 Game over — ' + gems + ' gems, score ' + score + '. Press Start!';
+  }
+
+  function togglePause() {
+    if (!running) return;
+    paused = !paused;
+    document.getElementById('pause').textContent = paused ? 'Resume' : 'Pause';
+    msgEl.textContent = paused ? '⏸ Paused' : '';
+  }
+
+  function input(action) {
+    if (!running || paused) return;
+    if (action === 'left') moveX(-1);
+    if (action === 'right') moveX(1);
+    if (action === 'rotate') rotate();
+    if (action === 'down') step();
+    if (action === 'drop') hardDrop();
+    draw();
+  }
+
+  const repeatTimers = {};
+  function startRepeat(action) {
+    stopRepeat(action);
+    repeatTimers[action] = setTimeout(() => {
+      repeatTimers[action] = setInterval(() => input(action), 50);
+    }, 170);
+  }
+  function stopRepeat(action) {
+    clearTimeout(repeatTimers[action]);
+    clearInterval(repeatTimers[action]);
+    delete repeatTimers[action];
+  }
+
+  const keyMap = {
+    ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'rotate',
+    ArrowDown: 'down', ' ': 'drop',
+  };
+  document.addEventListener('keydown', (e) => {
+    if (e.key in keyMap) {
+      e.preventDefault();
+      if (e.repeat) return;
+      const action = keyMap[e.key];
+      input(action);
+      if (action === 'left' || action === 'right' || action === 'down') startRepeat(action);
+    } else if (e.key === 'p' || e.key === 'P') {
+      togglePause();
+    }
+  });
+  document.addEventListener('keyup', (e) => {
+    if (e.key in keyMap) stopRepeat(keyMap[e.key]);
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!running || paused || !piece) return;
+    const rect = canvas.getBoundingClientRect();
+    const col = Math.floor((e.clientX - rect.left) / rect.width * COLS);
+    const xs = piece.cells.map(c => c[0]);
+    const target = col - Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
+    let guard = COLS;
+    while (piece.x < target && !collides(piece.cells, piece.x + 1, piece.y) && guard--) piece.x++;
+    while (piece.x > target && !collides(piece.cells, piece.x - 1, piece.y) && guard--) piece.x--;
+    draw();
+  });
+  canvas.addEventListener('click', () => input('rotate'));
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    input('drop');
+  });
+
+  const bindButton = (id, action, repeats) => {
+    const el = document.getElementById(id);
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      input(action);
+      if (repeats) startRepeat(action);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+      el.addEventListener(ev, () => stopRepeat(action)));
+  };
+  bindButton('t-left', 'left', true);
+  bindButton('t-right', 'right', true);
+  bindButton('t-rotate', 'rotate', false);
+  bindButton('t-drop', 'drop', false);
+
+  document.getElementById('start').addEventListener('click', startGame);
+  document.getElementById('pause').addEventListener('click', togglePause);
+
+  board = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
+  draw();
+  msgEl.textContent = 'Press Start to play!';
+})();
+</script>
+</body>
+</html>
