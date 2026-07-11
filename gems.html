@@ -53,7 +53,7 @@
   <div class="hud">
     <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
     <div class="stat"><div class="label">Gems</div><div class="value" id="gems">0</div></div>
-    <div class="stat"><div class="label">Level</div><div class="value" id="level">1</div></div>
+    <div class="stat"><div class="label">Time</div><div class="value" id="time">3:00</div></div>
     <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
   </div>
   <div id="wrap">
@@ -72,7 +72,10 @@
     <button id="t-right">➡️</button>
     <button id="t-drop">⬇️</button>
   </div>
-  <p class="controls-hint">Clear lines to set off cascades and collect the gems 💎<br>
+  <p class="controls-hint">Score as much as you can before the timer runs out — clearing a line triggers its gems:<br>
+  <b style="color:#ff5c8a">● bomb</b> blasts 3×3 &nbsp;·&nbsp; <b style="color:#e0b23a">▼ lightning</b> zaps the column &nbsp;·&nbsp;
+  <b style="color:#189fcf">◔ clock</b> +10 s &nbsp;·&nbsp; <b style="color:#9b6de0">◆ star</b> +250 pts<br>
+  Filling up to the top just sweeps the board clean — you only stop when time is up!<br>
   Arrows to move (hold to slide), ↑ to rotate, space to drop.
   Mouse: move to steer, click to rotate, right-click to drop.</p>
 </main>
@@ -87,7 +90,7 @@
   const msgEl = document.getElementById('message');
   const scoreEl = document.getElementById('score');
   const gemsEl = document.getElementById('gems');
-  const levelEl = document.getElementById('level');
+  const timeEl = document.getElementById('time');
   const bestEl = document.getElementById('best');
 
   const SHAPES = {
@@ -100,11 +103,19 @@
     L: { color: '#f2994a', cells: [[2,0],[0,1],[1,1],[2,1]], size: 3 },
   };
   const NAMES = Object.keys(SHAPES);
-  const GEM_COLORS = ['#ff5c8a', '#ffd166', '#06d6a0', '#4cc9f0', '#b388ff'];
+  // Each gem type has a power, triggered when its line clears
+  const GEMS = {
+    bomb:  '#ff5c8a',  // blasts the 3x3 around it
+    zap:   '#ffd166',  // clears its whole column
+    clock: '#4cc9f0',  // +10 seconds
+    star:  '#b388ff',  // +250 points (x chain)
+  };
+  const GEM_NAMES = Object.keys(GEMS);
+  const START_TIME = 180;
 
-  // Board cells are null or { c: blockColor, g: gemColor|null }
-  let board, piece, nextPiece, score, gems, lines, level, best;
-  let running = false, paused = false, dropTimer = null;
+  // Board cells are null or { c: blockColor, g: gemType|null }
+  let board, piece, nextPiece, score, gems, lines, level, best, timeLeft;
+  let running = false, paused = false, dropTimer = null, clockTimer = null;
 
   best = Number(localStorage.getItem('mariagemsbest') || 0);
   bestEl.textContent = best;
@@ -114,9 +125,9 @@
     return {
       name, color: s.color, size: s.size,
       cells: s.cells.map(c => c.slice()),
-      // ~1 gem per piece on average, sparkling in a random color
+      // ~1 gem per piece on average, each with a random power
       gems: s.cells.map(() =>
-        Math.random() < 0.28 ? GEM_COLORS[Math.floor(Math.random() * GEM_COLORS.length)] : null),
+        Math.random() < 0.28 ? GEM_NAMES[Math.floor(Math.random() * GEM_NAMES.length)] : null),
       x: Math.floor((COLS - s.size) / 2), y: 0,
     };
   }
@@ -127,9 +138,11 @@
     piece = nextPiece || makePiece(randomName());
     nextPiece = makePiece(randomName());
     drawNext();
+    // Reaching the top never ends the game — the board is swept clean
+    // and play continues until the timer runs out.
     if (collides(piece.cells, piece.x, piece.y)) {
-      gameOver();
-      return false;
+      board = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
+      msgEl.textContent = '🧹 Board swept — keep going!';
     }
     return true;
   }
@@ -182,20 +195,46 @@
 
   function resolveClears() {
     let chain = 0, totalLines = 0, totalGems = 0;
+    const fired = [];
     while (true) {
       const full = [];
       for (let r = 0; r < ROWS; r++) if (board[r].every(v => v)) full.push(r);
       if (full.length === 0) break;
       chain++;
-      let gemsHere = 0;
+      const triggers = [];
       full.forEach(r => {
-        board[r].forEach(cell => { if (cell.g) gemsHere++; });
+        board[r].forEach((cell, c) => { if (cell.g) triggers.push({ type: cell.g, r, c }); });
         board[r] = new Array(COLS).fill(null);
       });
+      let bonus = 0, blasted = 0;
+      triggers.forEach(t => {
+        if (t.type === 'bomb') {
+          for (let dr = -1; dr <= 1; dr++)
+            for (let dc = -1; dc <= 1; dc++) {
+              const rr = t.r + dr, cc = t.c + dc;
+              if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && board[rr][cc]) {
+                board[rr][cc] = null;
+                blasted++;
+              }
+            }
+          fired.push('💥');
+        } else if (t.type === 'zap') {
+          for (let rr = 0; rr < ROWS; rr++)
+            if (board[rr][t.c]) { board[rr][t.c] = null; blasted++; }
+          fired.push('⚡');
+        } else if (t.type === 'clock') {
+          timeLeft += 10;
+          updateTime();
+          fired.push('+10s');
+        } else if (t.type === 'star') {
+          bonus += 250;
+          fired.push('⭐');
+        }
+      });
       totalLines += full.length;
-      totalGems += gemsHere;
+      totalGems += triggers.length;
       score += [0, 100, 300, 500, 800][Math.min(full.length, 4)] * level * chain;
-      score += gemsHere * 40 * chain;
+      score += triggers.length * 40 * chain + bonus * chain + blasted * 10;
       applyGravity();
     }
     if (totalLines > 0) {
@@ -206,9 +245,10 @@
         level = newLevel;
         restartTimer();
       }
-      if (chain > 1) msgEl.textContent = '💎 Cascade x' + chain + '!';
-      else if (totalGems > 0) msgEl.textContent = '💎 +' + totalGems + ' gem' + (totalGems > 1 ? 's' : '');
-      else msgEl.textContent = '';
+      const parts = [];
+      if (chain > 1) parts.push('💎 Cascade x' + chain + '!');
+      if (fired.length) parts.push(fired.join(' '));
+      msgEl.textContent = parts.join(' ');
       updateHud();
     }
   }
@@ -222,10 +262,13 @@
     spawn();
   }
 
+  function updateTime() {
+    timeEl.textContent = Math.floor(timeLeft / 60) + ':' + String(timeLeft % 60).padStart(2, '0');
+  }
+
   function updateHud() {
     scoreEl.textContent = score;
     gemsEl.textContent = gems;
-    levelEl.textContent = level;
     if (score > best) {
       best = score;
       localStorage.setItem('mariagemsbest', best);
@@ -238,22 +281,53 @@
     c.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
   }
 
-  function drawGem(c, x, y, gemColor, size) {
+  // Each gem type gets its own shape: bomb = circle, zap = triangle,
+  // clock = circle with a hand, star = diamond.
+  function drawGem(c, x, y, type, size) {
     const cx = x * size + size / 2, cy = y * size + size / 2, r = size * 0.32;
-    c.beginPath();
-    c.moveTo(cx, cy - r);
-    c.lineTo(cx + r, cy);
-    c.lineTo(cx, cy + r);
-    c.lineTo(cx - r, cy);
-    c.closePath();
-    c.fillStyle = gemColor;
-    c.fill();
+    c.save();
+    c.fillStyle = GEMS[type];
     c.strokeStyle = 'rgba(255,255,255,0.85)';
     c.lineWidth = 1;
-    c.stroke();
-    // little sparkle
-    c.fillStyle = 'rgba(255,255,255,0.9)';
-    c.fillRect(cx - r * 0.35, cy - r * 0.45, 2, 2);
+    if (type === 'bomb') {
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.9)';
+      c.fillRect(cx - 1, cy - r - 1, 2, 3);
+    } else if (type === 'zap') {
+      c.beginPath();
+      c.moveTo(cx - r, cy - r);
+      c.lineTo(cx + r, cy - r);
+      c.lineTo(cx, cy + r);
+      c.closePath();
+      c.fill();
+      c.stroke();
+    } else if (type === 'clock') {
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.lineTo(cx, cy - r * 0.7);
+      c.moveTo(cx, cy);
+      c.lineTo(cx + r * 0.55, cy);
+      c.stroke();
+    } else {
+      c.beginPath();
+      c.moveTo(cx, cy - r);
+      c.lineTo(cx + r, cy);
+      c.lineTo(cx, cy + r);
+      c.lineTo(cx - r, cy);
+      c.closePath();
+      c.fill();
+      c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.9)';
+      c.fillRect(cx - r * 0.35, cy - r * 0.45, 2, 2);
+    }
+    c.restore();
   }
 
   function ghostY() {
@@ -321,20 +395,31 @@
   function startGame() {
     board = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
     score = 0; gems = 0; lines = 0; level = 1;
+    timeLeft = START_TIME;
     nextPiece = null;
     running = true; paused = false;
     msgEl.textContent = '';
     document.getElementById('pause').textContent = 'Pause';
     updateHud();
+    updateTime();
     spawn();
     draw();
     restartTimer();
+    clearInterval(clockTimer);
+    clockTimer = setInterval(() => {
+      if (!running || paused) return;
+      timeLeft--;
+      updateTime();
+      if (timeLeft <= 0) timeUp();
+    }, 1000);
   }
 
-  function gameOver() {
+  function timeUp() {
     running = false;
     clearInterval(dropTimer);
-    msgEl.textContent = '💔 Game over — ' + gems + ' gems, score ' + score + '. Press Start!';
+    clearInterval(clockTimer);
+    updateHud();
+    msgEl.textContent = '⏰ Time is up! ' + gems + ' gems, score ' + score + '. Press Start!';
   }
 
   function togglePause() {

@@ -101,7 +101,7 @@
   const NAMES = Object.keys(SHAPES);
 
   let board, piece, nextName, score, lines, level, best;
-  let running = false, paused = false, dropTimer = null;
+  let running = false, paused = false, animating = false, dropTimer = null;
 
   best = Number(localStorage.getItem('mariatetrisbest') || 0);
   bestEl.textContent = best;
@@ -167,26 +167,46 @@
       const y = piece.y + cy, x = piece.x + cx;
       if (y >= 0) board[y][x] = piece.color;
     });
-    let cleared = 0;
-    for (let r = ROWS - 1; r >= 0; r--) {
-      if (board[r].every(v => v)) {
-        board.splice(r, 1);
-        board.unshift(new Array(COLS).fill(null));
-        cleared++;
-        r++;
-      }
+    const full = [];
+    for (let r = 0; r < ROWS; r++) if (board[r].every(v => v)) full.push(r);
+    if (full.length === 0) {
+      spawn();
+      return;
     }
-    if (cleared) {
-      lines += cleared;
-      score += [0, 100, 300, 500, 800][cleared] * level;
-      const newLevel = Math.floor(lines / 10) + 1;
-      if (newLevel !== level) {
-        level = newLevel;
-        restartTimer();
+    // Glow-flash the full rows before removing them
+    piece = null;
+    animating = true;
+    let flashes = 0;
+    const iv = setInterval(() => {
+      flashes++;
+      drawFlash(full, flashes % 2 === 1);
+      if (flashes >= 5) {
+        clearInterval(iv);
+        animating = false;
+        [...full].sort((a, b) => b - a).forEach(r => board.splice(r, 1));
+        for (let i = 0; i < full.length; i++) board.unshift(new Array(COLS).fill(null));
+        lines += full.length;
+        score += [0, 100, 300, 500, 800][full.length] * level;
+        const newLevel = Math.floor(lines / 10) + 1;
+        if (newLevel !== level) {
+          level = newLevel;
+          restartTimer();
+        }
+        updateHud();
+        spawn();
+        draw();
       }
-      updateHud();
-    }
-    spawn();
+    }, 80);
+  }
+
+  function drawFlash(rows, bright) {
+    draw();
+    ctx.save();
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = bright ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)';
+    rows.forEach(r => ctx.fillRect(1, r * SIZE + 1, COLS * SIZE - 2, SIZE - 2));
+    ctx.restore();
   }
 
   function updateHud() {
@@ -245,7 +265,7 @@
   }
 
   function tick() {
-    if (!running || paused) return;
+    if (!running || paused || animating) return;
     step();
     draw();
   }
@@ -283,7 +303,7 @@
   }
 
   function input(action) {
-    if (!running || paused) return;
+    if (!running || paused || animating || !piece) return;
     if (action === 'left') moveX(-1);
     if (action === 'right') moveX(1);
     if (action === 'rotate') rotate();
