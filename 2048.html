@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2048 — Maria's Games</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧩</text></svg>">
+<link rel="stylesheet" href="style.css">
+<style>
+  #board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    background: #bbada0;
+    border-radius: 12px;
+    padding: 10px;
+    width: min(92vw, 420px);
+    aspect-ratio: 1;
+    touch-action: none;
+    user-select: none;
+  }
+  .tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #cdc1b4;
+    font-weight: 800;
+    font-size: clamp(18px, 7vw, 40px);
+    color: #776e65;
+    transition: transform 0.08s ease;
+  }
+  .tile.pop { animation: pop 0.15s ease; }
+  @keyframes pop { 0% { transform: scale(0.6); } 100% { transform: scale(1); } }
+  .t2    { background: #eee4da; }
+  .t4    { background: #ede0c8; }
+  .t8    { background: #f2b179; color: #fff; }
+  .t16   { background: #f59563; color: #fff; }
+  .t32   { background: #f67c5f; color: #fff; }
+  .t64   { background: #f65e3b; color: #fff; }
+  .t128  { background: #edcf72; color: #fff; font-size: clamp(16px, 6vw, 34px); }
+  .t256  { background: #edcc61; color: #fff; font-size: clamp(16px, 6vw, 34px); }
+  .t512  { background: #edc850; color: #fff; font-size: clamp(16px, 6vw, 34px); }
+  .t1024 { background: #edc53f; color: #fff; font-size: clamp(14px, 5vw, 28px); }
+  .t2048 { background: #edc22e; color: #fff; font-size: clamp(14px, 5vw, 28px); box-shadow: 0 0 18px rgba(237,194,46,0.7); }
+  .tbig  { background: #3c3a32; color: #fff; font-size: clamp(14px, 5vw, 28px); }
+  #message { text-align: center; font-weight: 700; margin-top: 12px; min-height: 1.4em; color: var(--accent-dark); font-size: 1.1rem; }
+</style>
+</head>
+<body>
+<header class="site">
+  <h1><a href="index.html">🎲 Maria's Games</a></h1>
+  <a class="back" href="index.html">← All games</a>
+</header>
+<main>
+  <div class="hud">
+    <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+    <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+    <button class="btn" id="new">New Game</button>
+  </div>
+  <div id="board"></div>
+  <div id="message"></div>
+  <p class="controls-hint">Swipe on the board or use the arrow keys.</p>
+</main>
+<footer class="site">Made for Maria ❤️</footer>
+<script>
+(function () {
+  const boardEl = document.getElementById('board');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const msgEl = document.getElementById('message');
+  let grid, score, best, over, won;
+
+  best = Number(localStorage.getItem('maria2048best') || 0);
+  bestEl.textContent = best;
+
+  function newGame() {
+    grid = new Array(16).fill(0);
+    score = 0;
+    over = false;
+    won = false;
+    msgEl.textContent = '';
+    addTile();
+    addTile();
+    render([]);
+  }
+
+  function addTile() {
+    const empty = grid.map((v, i) => v === 0 ? i : -1).filter(i => i >= 0);
+    if (empty.length === 0) return -1;
+    const idx = empty[Math.floor(Math.random() * empty.length)];
+    grid[idx] = Math.random() < 0.9 ? 2 : 4;
+    return idx;
+  }
+
+  function render(popIdxs) {
+    boardEl.innerHTML = '';
+    for (let i = 0; i < 16; i++) {
+      const t = document.createElement('div');
+      const v = grid[i];
+      t.className = 'tile' + (v ? (v <= 2048 ? ' t' + v : ' tbig') : '');
+      if (popIdxs.includes(i)) t.classList.add('pop');
+      t.textContent = v || '';
+      boardEl.appendChild(t);
+    }
+    scoreEl.textContent = score;
+    if (score > best) {
+      best = score;
+      localStorage.setItem('maria2048best', best);
+      bestEl.textContent = best;
+    }
+  }
+
+  // Slide one row of 4 values toward index 0. Returns [newRow, gained, moved].
+  function slideRow(row) {
+    const vals = row.filter(v => v !== 0);
+    const out = [];
+    let gained = 0;
+    for (let i = 0; i < vals.length; i++) {
+      if (i + 1 < vals.length && vals[i] === vals[i + 1]) {
+        out.push(vals[i] * 2);
+        gained += vals[i] * 2;
+        i++;
+      } else {
+        out.push(vals[i]);
+      }
+    }
+    while (out.length < 4) out.push(0);
+    const moved = out.some((v, i) => v !== row[i]);
+    return [out, gained, moved];
+  }
+
+  // dir: 0=left, 1=right, 2=up, 3=down
+  function move(dir) {
+    if (over) return;
+    let movedAny = false;
+    const merged = [];
+    for (let line = 0; line < 4; line++) {
+      const idxs = [];
+      for (let k = 0; k < 4; k++) {
+        if (dir === 0) idxs.push(line * 4 + k);
+        if (dir === 1) idxs.push(line * 4 + (3 - k));
+        if (dir === 2) idxs.push(k * 4 + line);
+        if (dir === 3) idxs.push((3 - k) * 4 + line);
+      }
+      const row = idxs.map(i => grid[i]);
+      const [out, gained, moved] = slideRow(row);
+      if (moved) {
+        movedAny = true;
+        idxs.forEach((gi, k) => {
+          if (out[k] !== row[k] && out[k] !== 0) merged.push(gi);
+          grid[gi] = out[k];
+        });
+        score += gained;
+      }
+    }
+    if (!movedAny) return;
+    const newIdx = addTile();
+    if (newIdx >= 0) merged.push(newIdx);
+    render(merged);
+    if (!won && grid.includes(2048)) {
+      won = true;
+      msgEl.textContent = '🎉 2048! Bravo Maria! Keep going!';
+    }
+    if (!canMove()) {
+      over = true;
+      msgEl.textContent = '💔 No more moves — final score ' + score + '. Try again!';
+    }
+  }
+
+  function canMove() {
+    if (grid.includes(0)) return true;
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const v = grid[r * 4 + c];
+        if (c < 3 && grid[r * 4 + c + 1] === v) return true;
+        if (r < 3 && grid[(r + 1) * 4 + c] === v) return true;
+      }
+    }
+    return false;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const map = { ArrowLeft: 0, ArrowRight: 1, ArrowUp: 2, ArrowDown: 3 };
+    if (e.key in map) {
+      e.preventDefault();
+      move(map[e.key]);
+    }
+  });
+
+  let touchX = 0, touchY = 0;
+  boardEl.addEventListener('touchstart', (e) => {
+    touchX = e.touches[0].clientX;
+    touchY = e.touches[0].clientY;
+  }, { passive: true });
+  boardEl.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchX;
+    const dy = e.changedTouches[0].clientY - touchY;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 25) return;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : 0);
+    else move(dy > 0 ? 3 : 2);
+  });
+
+  document.getElementById('new').addEventListener('click', newGame);
+  newGame();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sudoku — Maria's Games</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔢</text></svg>">
+<link rel="stylesheet" href="style.css">
+<style>
+  #board {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    width: min(92vw, 440px);
+    aspect-ratio: 1;
+    border: 3px solid var(--ink);
+    border-radius: 6px;
+    overflow: hidden;
+    user-select: none;
+  }
+  .cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(16px, 4.5vw, 26px);
+    font-weight: 600;
+    border: 1px solid #d8ccba;
+    background: #fff;
+    cursor: pointer;
+  }
+  .cell.box-right { border-right: 2px solid var(--ink); }
+  .cell.box-bottom { border-bottom: 2px solid var(--ink); }
+  .cell.given { background: var(--soft); color: var(--ink); cursor: default; }
+  .cell.selected { background: #ffe3e6; }
+  .cell.same-num { background: #fdf0d8; }
+  .cell.error { color: #d33; }
+  .cell:not(.given) { color: var(--accent-dark); }
+
+  #numpad {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    width: min(92vw, 440px);
+    margin-top: 14px;
+  }
+  #numpad button {
+    font: inherit;
+    font-size: 1.3rem;
+    font-weight: 700;
+    padding: 12px 0;
+    border: none;
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  #numpad button:active { background: var(--soft); }
+  #message { text-align: center; font-weight: 700; margin-top: 12px; min-height: 1.4em; color: var(--accent-dark); }
+</style>
+</head>
+<body>
+<header class="site">
+  <h1><a href="index.html">🎲 Maria's Games</a></h1>
+  <a class="back" href="index.html">← All games</a>
+</header>
+<main>
+  <div class="hud">
+    <button class="btn" id="new-easy">Easy</button>
+    <button class="btn" id="new-medium">Medium</button>
+    <button class="btn" id="new-hard">Hard</button>
+    <button class="btn secondary" id="check">Check</button>
+  </div>
+  <div id="board"></div>
+  <div id="numpad"></div>
+  <div id="message"></div>
+  <p class="controls-hint">Tap a cell, then a number. Use ✕ (or 0) to erase. Keyboard 1–9 works too.</p>
+</main>
+<footer class="site">Made for Maria ❤️</footer>
+<script>
+(function () {
+  const boardEl = document.getElementById('board');
+  const msgEl = document.getElementById('message');
+  let solution = [];   // 81 numbers, the full solved grid
+  let puzzle = [];     // 81 numbers, 0 = empty (the givens)
+  let entries = [];    // 81 numbers, player's current grid
+  let selected = -1;
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function canPlace(grid, idx, val) {
+    const r = Math.floor(idx / 9), c = idx % 9;
+    for (let i = 0; i < 9; i++) {
+      if (grid[r * 9 + i] === val || grid[i * 9 + c] === val) return false;
+    }
+    const br = r - r % 3, bc = c - c % 3;
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 3; j++)
+        if (grid[(br + i) * 9 + bc + j] === val) return false;
+    return true;
+  }
+
+  function fillGrid(grid, idx) {
+    if (idx === 81) return true;
+    if (grid[idx] !== 0) return fillGrid(grid, idx + 1);
+    for (const val of shuffle([1,2,3,4,5,6,7,8,9])) {
+      if (canPlace(grid, idx, val)) {
+        grid[idx] = val;
+        if (fillGrid(grid, idx + 1)) return true;
+        grid[idx] = 0;
+      }
+    }
+    return false;
+  }
+
+  // Count solutions (early-exit at 2) so removals keep the puzzle unique.
+  function countSolutions(grid, idx, limit) {
+    if (idx === 81) return 1;
+    if (grid[idx] !== 0) return countSolutions(grid, idx + 1, limit);
+    let count = 0;
+    for (let val = 1; val <= 9; val++) {
+      if (canPlace(grid, idx, val)) {
+        grid[idx] = val;
+        count += countSolutions(grid, idx + 1, limit - count);
+        grid[idx] = 0;
+        if (count >= limit) return count;
+      }
+    }
+    return count;
+  }
+
+  function newGame(holes) {
+    msgEl.textContent = '';
+    solution = new Array(81).fill(0);
+    fillGrid(solution, 0);
+    puzzle = solution.slice();
+    let removed = 0;
+    for (const idx of shuffle([...Array(81).keys()])) {
+      if (removed >= holes) break;
+      const saved = puzzle[idx];
+      puzzle[idx] = 0;
+      if (countSolutions(puzzle.slice(), 0, 2) === 1) {
+        removed++;
+      } else {
+        puzzle[idx] = saved;
+      }
+    }
+    entries = puzzle.slice();
+    selected = -1;
+    render();
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    const selVal = selected >= 0 ? entries[selected] : 0;
+    for (let i = 0; i < 81; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const r = Math.floor(i / 9), c = i % 9;
+      if (c === 2 || c === 5) cell.classList.add('box-right');
+      if (r === 2 || r === 5) cell.classList.add('box-bottom');
+      if (puzzle[i] !== 0) cell.classList.add('given');
+      if (i === selected) cell.classList.add('selected');
+      else if (selVal && entries[i] === selVal) cell.classList.add('same-num');
+      if (entries[i] !== 0) cell.textContent = entries[i];
+      cell.addEventListener('click', () => {
+        // Tapping a given just highlights matching numbers; tapping an
+        // empty/player cell selects it for input.
+        selected = (puzzle[i] === 0) ? i : -1;
+        render();
+        if (puzzle[i] !== 0) {
+          const cells = boardEl.children;
+          for (let k = 0; k < 81; k++) {
+            if (entries[k] === entries[i]) cells[k].classList.add('same-num');
+          }
+        }
+      });
+      boardEl.appendChild(cell);
+    }
+  }
+
+  function setNumber(val) {
+    if (selected < 0 || puzzle[selected] !== 0) return;
+    entries[selected] = val;
+    msgEl.textContent = '';
+    render();
+    if (val !== 0 && !entries.includes(0)) checkBoard(true);
+  }
+
+  function checkBoard(auto) {
+    let wrong = 0, empty = 0;
+    const cells = boardEl.children;
+    for (let i = 0; i < 81; i++) {
+      cells[i].classList.remove('error');
+      if (entries[i] === 0) { empty++; continue; }
+      if (entries[i] !== solution[i]) {
+        wrong++;
+        if (puzzle[i] === 0) cells[i].classList.add('error');
+      }
+    }
+    if (wrong === 0 && empty === 0) {
+      msgEl.textContent = '🎉 Bravo Maria! Solved!';
+    } else if (wrong === 0) {
+      msgEl.textContent = auto ? '' : 'Looking good so far! ' + empty + ' to go.';
+    } else {
+      msgEl.textContent = wrong + ' cell' + (wrong > 1 ? 's are' : ' is') + ' wrong (shown in red).';
+    }
+  }
+
+  // Number pad
+  const pad = document.getElementById('numpad');
+  for (let n = 1; n <= 9; n++) {
+    const b = document.createElement('button');
+    b.textContent = n;
+    b.addEventListener('click', () => setNumber(n));
+    pad.appendChild(b);
+  }
+  const erase = document.createElement('button');
+  erase.textContent = '✕';
+  erase.addEventListener('click', () => setNumber(0));
+  pad.appendChild(erase);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key >= '1' && e.key <= '9') setNumber(Number(e.key));
+    if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') setNumber(0);
+  });
+
+  document.getElementById('new-easy').addEventListener('click', () => newGame(38));
+  document.getElementById('new-medium').addEventListener('click', () => newGame(46));
+  document.getElementById('new-hard').addEventListener('click', () => newGame(52));
+  document.getElementById('check').addEventListener('click', () => checkBoard(false));
+
+  newGame(38);
+})();
+</script>
+</body>
+</html>
