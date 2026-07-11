@@ -4,44 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gems — Maria's Games</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💎</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💠</text></svg>">
 <link rel="stylesheet" href="style.css">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5441764367815214"
      crossorigin="anonymous"></script>
 <style>
-  #wrap { display: flex; gap: 16px; align-items: flex-start; justify-content: center; }
-  canvas#game {
-    background: #241f2e;
-    border-radius: 10px;
-    box-shadow: var(--shadow);
-    width: min(60vw, 280px);
-    height: auto;
-    touch-action: none;
-  }
-  #side { display: flex; flex-direction: column; gap: 10px; align-items: center; }
-  canvas#next { background: #241f2e; border-radius: 10px; width: 90px; height: 90px; }
-  #side .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: #8a7a6a; }
-  #message { text-align: center; font-weight: 700; margin-top: 12px; min-height: 1.4em; color: var(--accent-dark); font-size: 1.05rem; }
-  #touch {
+  #board {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    width: min(92vw, 420px);
-    margin-top: 14px;
-  }
-  #touch button {
-    font-size: 1.5rem;
-    padding: 14px 0;
-    border: none;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    background: #3a3145;
     border-radius: 12px;
-    background: var(--card);
-    box-shadow: var(--shadow);
-    cursor: pointer;
+    padding: 8px;
+    width: min(92vw, 440px);
+    aspect-ratio: 1;
+    touch-action: none;
     user-select: none;
-    -webkit-user-select: none;
-    touch-action: manipulation;
   }
-  #touch button:active { background: var(--soft); }
+  .gem {
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+    box-shadow: inset -3px -4px 6px rgba(0,0,0,0.25), inset 3px 4px 6px rgba(255,255,255,0.35);
+  }
+  .g0 { background: #e2707a; }
+  .g1 { background: #f2c94c; border-radius: 22%; }
+  .g2 { background: #6fcf7c; border-radius: 22%; transform: rotate(45deg) scale(0.82); }
+  .g2.selected, .g2.pop { transform: rotate(45deg) scale(0.82); }
+  .g3 { background: #4cc9f0; }
+  .g4 { background: #b388ff; border-radius: 50% 50% 22% 22%; }
+  .g5 { background: #f2994a; border-radius: 22% 50% 22% 50%; }
+  .gem.selected { outline: 3px solid #fff; outline-offset: 1px; }
+  .gem.pop { animation: gempop 0.18s ease; }
+  @keyframes gempop { 0% { opacity: 0; scale: 0.4; } 100% { opacity: 1; scale: 1; } }
+  .gem.shake { animation: gemshake 0.25s ease; }
+  @keyframes gemshake { 0%,100% { translate: 0; } 25% { translate: -4px; } 75% { translate: 4px; } }
+  #message { text-align: center; font-weight: 700; margin-top: 12px; min-height: 1.4em; color: var(--accent-dark); font-size: 1.05rem; }
 </style>
 </head>
 <body>
@@ -52,463 +50,217 @@
 <main>
   <div class="hud">
     <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
-    <div class="stat"><div class="label">Gems</div><div class="value" id="gems">0</div></div>
-    <div class="stat"><div class="label">Time</div><div class="value" id="time">3:00</div></div>
     <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+    <button class="btn" id="new">New Game</button>
   </div>
-  <div id="wrap">
-    <canvas id="game" width="200" height="400"></canvas>
-    <div id="side">
-      <div class="label">Next</div>
-      <canvas id="next" width="80" height="80"></canvas>
-      <button class="btn" id="start">Start</button>
-      <button class="btn secondary" id="pause">Pause</button>
-    </div>
-  </div>
+  <div id="board"></div>
   <div id="message"></div>
-  <div id="touch">
-    <button id="t-left">⬅️</button>
-    <button id="t-rotate">🔄</button>
-    <button id="t-right">➡️</button>
-    <button id="t-drop">⬇️</button>
-  </div>
-  <p class="controls-hint">Score as much as you can before the timer runs out — clearing a line triggers its gems:<br>
-  <b style="color:#ff5c8a">● bomb</b> blasts 3×3 &nbsp;·&nbsp; <b style="color:#e0b23a">▼ lightning</b> zaps the column &nbsp;·&nbsp;
-  <b style="color:#189fcf">◔ clock</b> +10 s &nbsp;·&nbsp; <b style="color:#9b6de0">◆ star</b> +250 pts<br>
-  Filling up to the top just sweeps the board clean — you only stop when time is up!<br>
-  Arrows to move (hold to slide), ↑ to rotate, space to drop.
-  Mouse: move to steer, click to rotate, right-click to drop.</p>
+  <p class="controls-hint">Swap two neighbouring gems to line up 3 or more.<br>
+  Tap one gem then a neighbour — or just swipe a gem in any direction. Chains score extra!</p>
 </main>
 <footer class="site">Made for Maria ❤️</footer>
 <script>
 (function () {
-  const COLS = 10, ROWS = 20, SIZE = 20;
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const nextCanvas = document.getElementById('next');
-  const nctx = nextCanvas.getContext('2d');
-  const msgEl = document.getElementById('message');
+  const N = 8, TYPES = 6;
+  const boardEl = document.getElementById('board');
   const scoreEl = document.getElementById('score');
-  const gemsEl = document.getElementById('gems');
-  const timeEl = document.getElementById('time');
   const bestEl = document.getElementById('best');
+  const msgEl = document.getElementById('message');
+  let board = [];        // N*N gem types 0..5, -1 = empty while resolving
+  let score = 0, best, selected = -1, busy = false;
 
-  const SHAPES = {
-    I: { color: '#5ad0e0', cells: [[0,1],[1,1],[2,1],[3,1]], size: 4 },
-    O: { color: '#f2c94c', cells: [[0,0],[1,0],[0,1],[1,1]], size: 2 },
-    T: { color: '#bb6bd9', cells: [[1,0],[0,1],[1,1],[2,1]], size: 3 },
-    S: { color: '#6fcf7c', cells: [[1,0],[2,0],[0,1],[1,1]], size: 3 },
-    Z: { color: '#eb5757', cells: [[0,0],[1,0],[1,1],[2,1]], size: 3 },
-    J: { color: '#5b7fe0', cells: [[0,0],[0,1],[1,1],[2,1]], size: 3 },
-    L: { color: '#f2994a', cells: [[2,0],[0,1],[1,1],[2,1]], size: 3 },
-  };
-  const NAMES = Object.keys(SHAPES);
-  // Each gem type has a power, triggered when its line clears
-  const GEMS = {
-    bomb:  '#ff5c8a',  // blasts the 3x3 around it
-    zap:   '#ffd166',  // clears its whole column
-    clock: '#4cc9f0',  // +10 seconds
-    star:  '#b388ff',  // +250 points (x chain)
-  };
-  const GEM_NAMES = Object.keys(GEMS);
-  const START_TIME = 180;
-
-  // Board cells are null or { c: blockColor, g: gemType|null }
-  let board, piece, nextPiece, score, gems, lines, level, best, timeLeft;
-  let running = false, paused = false, dropTimer = null, clockTimer = null;
-
-  best = Number(localStorage.getItem('mariagemsbest') || 0);
+  best = Number(localStorage.getItem('mariagemsmatchbest') || 0);
   bestEl.textContent = best;
 
-  function makePiece(name) {
-    const s = SHAPES[name];
-    return {
-      name, color: s.color, size: s.size,
-      cells: s.cells.map(c => c.slice()),
-      // ~1 gem per piece on average, each with a random power
-      gems: s.cells.map(() =>
-        Math.random() < 0.28 ? GEM_NAMES[Math.floor(Math.random() * GEM_NAMES.length)] : null),
-      x: Math.floor((COLS - s.size) / 2), y: 0,
-    };
-  }
+  const row = i => Math.floor(i / N), col = i => i % N;
+  const adjacent = (a, b) =>
+    (row(a) === row(b) && Math.abs(col(a) - col(b)) === 1) ||
+    (col(a) === col(b) && Math.abs(row(a) - row(b)) === 1);
 
-  function randomName() { return NAMES[Math.floor(Math.random() * NAMES.length)]; }
-
-  function spawn() {
-    piece = nextPiece || makePiece(randomName());
-    nextPiece = makePiece(randomName());
-    drawNext();
-    // Reaching the top never ends the game — the board is swept clean
-    // and play continues until the timer runs out.
-    if (collides(piece.cells, piece.x, piece.y)) {
-      board = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
-      msgEl.textContent = '🧹 Board swept — keep going!';
-    }
-    return true;
-  }
-
-  function collides(cells, px, py) {
-    return cells.some(([cx, cy]) => {
-      const x = px + cx, y = py + cy;
-      return x < 0 || x >= COLS || y >= ROWS || (y >= 0 && board[y][x]);
-    });
-  }
-
-  function rotate() {
-    if (piece.name === 'O') return;
-    const rotated = piece.cells.map(([cx, cy]) => [piece.size - 1 - cy, cx]);
-    for (const dx of [0, -1, 1, -2, 2]) {
-      if (!collides(rotated, piece.x + dx, piece.y)) {
-        piece.cells = rotated;
-        piece.x += dx;
-        return;
+  function findMatches(b) {
+    const m = new Set();
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N - 2; c++) {
+        const i = r * N + c, v = b[i];
+        if (v >= 0 && b[i + 1] === v && b[i + 2] === v) {
+          let k = c;
+          while (k < N && b[r * N + k] === v) { m.add(r * N + k); k++; }
+        }
       }
     }
-  }
-
-  function moveX(dx) {
-    if (!collides(piece.cells, piece.x + dx, piece.y)) piece.x += dx;
-  }
-
-  function step() {
-    if (!collides(piece.cells, piece.x, piece.y + 1)) {
-      piece.y++;
-      return true;
+    for (let c = 0; c < N; c++) {
+      for (let r = 0; r < N - 2; r++) {
+        const i = r * N + c, v = b[i];
+        if (v >= 0 && b[i + N] === v && b[i + 2 * N] === v) {
+          let k = r;
+          while (k < N && b[k * N + c] === v) { m.add(k * N + c); k++; }
+        }
+      }
     }
-    lock();
+    return m;
+  }
+
+  function hasMove() {
+    for (let i = 0; i < N * N; i++) {
+      for (const j of [i + 1, i + N]) {
+        if (j >= N * N || (j === i + 1 && col(i) === N - 1)) continue;
+        [board[i], board[j]] = [board[j], board[i]];
+        const ok = findMatches(board).size > 0;
+        [board[i], board[j]] = [board[j], board[i]];
+        if (ok) return true;
+      }
+    }
     return false;
   }
 
-  function hardDrop() {
-    while (step()) {}
-  }
-
-  // After a clear, every block falls straight down to fill gaps below it.
-  // That is what sets off the cascades.
-  function applyGravity() {
-    for (let c = 0; c < COLS; c++) {
-      const stack = [];
-      for (let r = ROWS - 1; r >= 0; r--) if (board[r][c]) stack.push(board[r][c]);
-      for (let r = ROWS - 1; r >= 0; r--) board[r][c] = stack[ROWS - 1 - r] || null;
-    }
-  }
-
-  function resolveClears() {
-    let chain = 0, totalLines = 0, totalGems = 0;
-    const fired = [];
-    while (true) {
-      const full = [];
-      for (let r = 0; r < ROWS; r++) if (board[r].every(v => v)) full.push(r);
-      if (full.length === 0) break;
-      chain++;
-      const triggers = [];
-      full.forEach(r => {
-        board[r].forEach((cell, c) => { if (cell.g) triggers.push({ type: cell.g, r, c }); });
-        board[r] = new Array(COLS).fill(null);
-      });
-      let bonus = 0, blasted = 0;
-      triggers.forEach(t => {
-        if (t.type === 'bomb') {
-          for (let dr = -1; dr <= 1; dr++)
-            for (let dc = -1; dc <= 1; dc++) {
-              const rr = t.r + dr, cc = t.c + dc;
-              if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && board[rr][cc]) {
-                board[rr][cc] = null;
-                blasted++;
-              }
-            }
-          fired.push('💥');
-        } else if (t.type === 'zap') {
-          for (let rr = 0; rr < ROWS; rr++)
-            if (board[rr][t.c]) { board[rr][t.c] = null; blasted++; }
-          fired.push('⚡');
-        } else if (t.type === 'clock') {
-          timeLeft += 10;
-          updateTime();
-          fired.push('+10s');
-        } else if (t.type === 'star') {
-          bonus += 250;
-          fired.push('⭐');
-        }
-      });
-      totalLines += full.length;
-      totalGems += triggers.length;
-      score += [0, 100, 300, 500, 800][Math.min(full.length, 4)] * level * chain;
-      score += triggers.length * 40 * chain + bonus * chain + blasted * 10;
-      applyGravity();
-    }
-    if (totalLines > 0) {
-      lines += totalLines;
-      gems += totalGems;
-      const newLevel = Math.floor(lines / 10) + 1;
-      if (newLevel !== level) {
-        level = newLevel;
-        restartTimer();
+  function newBoard() {
+    // Fill avoiding ready-made matches, then make sure a move exists
+    do {
+      for (let i = 0; i < N * N; i++) {
+        let v;
+        do {
+          v = Math.floor(Math.random() * TYPES);
+        } while (
+          (col(i) >= 2 && board[i - 1] === v && board[i - 2] === v) ||
+          (row(i) >= 2 && board[i - N] === v && board[i - 2 * N] === v)
+        );
+        board[i] = v;
       }
-      const parts = [];
-      if (chain > 1) parts.push('💎 Cascade x' + chain + '!');
-      if (fired.length) parts.push(fired.join(' '));
-      msgEl.textContent = parts.join(' ');
-      updateHud();
+    } while (!hasMove());
+  }
+
+  function render(popIdxs) {
+    boardEl.innerHTML = '';
+    for (let i = 0; i < N * N; i++) {
+      const d = document.createElement('div');
+      d.className = 'gem g' + board[i];
+      if (i === selected) d.classList.add('selected');
+      if (popIdxs && popIdxs.has(i)) d.classList.add('pop');
+      d.dataset.i = i;
+      boardEl.appendChild(d);
     }
-  }
-
-  function lock() {
-    piece.cells.forEach(([cx, cy], i) => {
-      const y = piece.y + cy, x = piece.x + cx;
-      if (y >= 0) board[y][x] = { c: piece.color, g: piece.gems[i] };
-    });
-    resolveClears();
-    spawn();
-  }
-
-  function updateTime() {
-    timeEl.textContent = Math.floor(timeLeft / 60) + ':' + String(timeLeft % 60).padStart(2, '0');
   }
 
   function updateHud() {
     scoreEl.textContent = score;
-    gemsEl.textContent = gems;
     if (score > best) {
       best = score;
-      localStorage.setItem('mariagemsbest', best);
+      localStorage.setItem('mariagemsmatchbest', best);
       bestEl.textContent = best;
     }
   }
 
-  function drawCell(c, x, y, color, size) {
-    c.fillStyle = color;
-    c.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  }
-
-  // Each gem type gets its own shape: bomb = circle, zap = triangle,
-  // clock = circle with a hand, star = diamond.
-  function drawGem(c, x, y, type, size) {
-    const cx = x * size + size / 2, cy = y * size + size / 2, r = size * 0.32;
-    c.save();
-    c.fillStyle = GEMS[type];
-    c.strokeStyle = 'rgba(255,255,255,0.85)';
-    c.lineWidth = 1;
-    if (type === 'bomb') {
-      c.beginPath();
-      c.arc(cx, cy, r, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-      c.fillStyle = 'rgba(255,255,255,0.9)';
-      c.fillRect(cx - 1, cy - r - 1, 2, 3);
-    } else if (type === 'zap') {
-      c.beginPath();
-      c.moveTo(cx - r, cy - r);
-      c.lineTo(cx + r, cy - r);
-      c.lineTo(cx, cy + r);
-      c.closePath();
-      c.fill();
-      c.stroke();
-    } else if (type === 'clock') {
-      c.beginPath();
-      c.arc(cx, cy, r, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-      c.beginPath();
-      c.moveTo(cx, cy);
-      c.lineTo(cx, cy - r * 0.7);
-      c.moveTo(cx, cy);
-      c.lineTo(cx + r * 0.55, cy);
-      c.stroke();
-    } else {
-      c.beginPath();
-      c.moveTo(cx, cy - r);
-      c.lineTo(cx + r, cy);
-      c.lineTo(cx, cy + r);
-      c.lineTo(cx - r, cy);
-      c.closePath();
-      c.fill();
-      c.stroke();
-      c.fillStyle = 'rgba(255,255,255,0.9)';
-      c.fillRect(cx - r * 0.35, cy - r * 0.45, 2, 2);
-    }
-    c.restore();
-  }
-
-  function ghostY() {
-    let y = piece.y;
-    while (!collides(piece.cells, piece.x, y + 1)) y++;
-    return y;
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const cell = board[r][c];
-        if (cell) {
-          drawCell(ctx, c, r, cell.c, SIZE);
-          if (cell.g) drawGem(ctx, c, r, cell.g, SIZE);
+  function gravityRefill() {
+    const fresh = new Set();
+    for (let c = 0; c < N; c++) {
+      const stack = [];
+      for (let r = N - 1; r >= 0; r--) if (board[r * N + c] >= 0) stack.push(board[r * N + c]);
+      for (let r = N - 1; r >= 0; r--) {
+        const v = stack[N - 1 - r];
+        if (v === undefined) {
+          board[r * N + c] = Math.floor(Math.random() * TYPES);
+          fresh.add(r * N + c);
+        } else {
+          board[r * N + c] = v;
         }
       }
     }
-    if (piece) {
-      const gy = ghostY();
-      if (gy > piece.y) {
-        ctx.strokeStyle = piece.color;
-        ctx.lineWidth = 1.5;
-        ctx.globalAlpha = 0.45;
-        piece.cells.forEach(([cx, cy]) => {
-          if (gy + cy >= 0)
-            ctx.strokeRect((piece.x + cx) * SIZE + 2, (gy + cy) * SIZE + 2, SIZE - 4, SIZE - 4);
-        });
-        ctx.globalAlpha = 1;
+    return fresh;
+  }
+
+  function cascade(mult) {
+    const m = findMatches(board);
+    if (m.size === 0) {
+      busy = false;
+      if (mult > 2) msgEl.textContent = '✨ Chain x' + (mult - 1) + '!';
+      if (!hasMove()) {
+        msgEl.textContent = '🔀 No moves left — shuffling!';
+        setTimeout(() => { newBoard(); render(); }, 600);
       }
-      piece.cells.forEach(([cx, cy], i) => {
-        if (piece.y + cy >= 0) {
-          drawCell(ctx, piece.x + cx, piece.y + cy, piece.color, SIZE);
-          if (piece.gems[i]) drawGem(ctx, piece.x + cx, piece.y + cy, piece.gems[i], SIZE);
-        }
-      });
+      return;
     }
+    score += m.size * 10 * mult;
+    updateHud();
+    m.forEach(i => board[i] = -1);
+    const cells = boardEl.children;
+    m.forEach(i => { cells[i].style.opacity = '0'; });
+    setTimeout(() => {
+      const fresh = gravityRefill();
+      render(fresh);
+      setTimeout(() => cascade(mult + 1), 140);
+    }, 180);
   }
 
-  function drawNext() {
-    nctx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
-    const s = SHAPES[nextPiece.name];
-    const cell = 16;
-    const offX = (nextCanvas.width - s.size * cell) / 2 / cell;
-    const offY = (nextCanvas.height - 2 * cell) / 2 / cell - (s.size === 2 ? 0 : 0.5);
-    nextPiece.cells.forEach(([cx, cy], i) => {
-      drawCell(nctx, cx + offX, cy + offY, nextPiece.color, cell);
-      if (nextPiece.gems[i]) drawGem(nctx, cx + offX, cy + offY, nextPiece.gems[i], cell);
-    });
-  }
-
-  function tick() {
-    if (!running || paused) return;
-    step();
-    draw();
-  }
-
-  function restartTimer() {
-    clearInterval(dropTimer);
-    const speed = Math.max(90, 700 - (level - 1) * 60);
-    dropTimer = setInterval(tick, speed);
-  }
-
-  function startGame() {
-    board = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
-    score = 0; gems = 0; lines = 0; level = 1;
-    timeLeft = START_TIME;
-    nextPiece = null;
-    running = true; paused = false;
+  function trySwap(a, b) {
+    if (busy || !adjacent(a, b)) return;
+    selected = -1;
+    [board[a], board[b]] = [board[b], board[a]];
+    if (findMatches(board).size === 0) {
+      [board[a], board[b]] = [board[b], board[a]];
+      render();
+      boardEl.children[a].classList.add('shake');
+      boardEl.children[b].classList.add('shake');
+      return;
+    }
+    busy = true;
     msgEl.textContent = '';
-    document.getElementById('pause').textContent = 'Pause';
-    updateHud();
-    updateTime();
-    spawn();
-    draw();
-    restartTimer();
-    clearInterval(clockTimer);
-    clockTimer = setInterval(() => {
-      if (!running || paused) return;
-      timeLeft--;
-      updateTime();
-      if (timeLeft <= 0) timeUp();
-    }, 1000);
+    render();
+    cascade(1);
   }
 
-  function timeUp() {
-    running = false;
-    clearInterval(dropTimer);
-    clearInterval(clockTimer);
-    updateHud();
-    msgEl.textContent = '⏰ Time is up! ' + gems + ' gems, score ' + score + '. Press Start!';
-  }
-
-  function togglePause() {
-    if (!running) return;
-    paused = !paused;
-    document.getElementById('pause').textContent = paused ? 'Resume' : 'Pause';
-    msgEl.textContent = paused ? '⏸ Paused' : '';
-  }
-
-  function input(action) {
-    if (!running || paused) return;
-    if (action === 'left') moveX(-1);
-    if (action === 'right') moveX(1);
-    if (action === 'rotate') rotate();
-    if (action === 'down') step();
-    if (action === 'drop') hardDrop();
-    draw();
-  }
-
-  const repeatTimers = {};
-  function startRepeat(action) {
-    stopRepeat(action);
-    repeatTimers[action] = setTimeout(() => {
-      repeatTimers[action] = setInterval(() => input(action), 50);
-    }, 170);
-  }
-  function stopRepeat(action) {
-    clearTimeout(repeatTimers[action]);
-    clearInterval(repeatTimers[action]);
-    delete repeatTimers[action];
-  }
-
-  const keyMap = {
-    ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'rotate',
-    ArrowDown: 'down', ' ': 'drop',
-  };
-  document.addEventListener('keydown', (e) => {
-    if (e.key in keyMap) {
-      e.preventDefault();
-      if (e.repeat) return;
-      const action = keyMap[e.key];
-      input(action);
-      if (action === 'left' || action === 'right' || action === 'down') startRepeat(action);
-    } else if (e.key === 'p' || e.key === 'P') {
-      togglePause();
+  // Tap-tap or swipe
+  let downI = -1, downX = 0, downY = 0;
+  boardEl.addEventListener('pointerdown', (e) => {
+    const t = e.target.closest('.gem');
+    if (!t || busy) return;
+    downI = Number(t.dataset.i);
+    downX = e.clientX;
+    downY = e.clientY;
+  });
+  boardEl.addEventListener('pointerup', (e) => {
+    if (downI < 0 || busy) { downI = -1; return; }
+    const dx = e.clientX - downX, dy = e.clientY - downY;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) > 18) {
+      // Swipe: swap with the neighbour in that direction
+      let target = -1;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx > 0 && col(downI) < N - 1) target = downI + 1;
+        if (dx < 0 && col(downI) > 0) target = downI - 1;
+      } else {
+        if (dy > 0 && row(downI) < N - 1) target = downI + N;
+        if (dy < 0 && row(downI) > 0) target = downI - N;
+      }
+      if (target >= 0) trySwap(downI, target);
+    } else {
+      // Tap: select, then tap a neighbour
+      if (selected < 0) {
+        selected = downI;
+        render();
+      } else if (selected === downI) {
+        selected = -1;
+        render();
+      } else if (adjacent(selected, downI)) {
+        trySwap(selected, downI);
+      } else {
+        selected = downI;
+        render();
+      }
     }
-  });
-  document.addEventListener('keyup', (e) => {
-    if (e.key in keyMap) stopRepeat(keyMap[e.key]);
+    downI = -1;
   });
 
-  canvas.addEventListener('mousemove', (e) => {
-    if (!running || paused || !piece) return;
-    const rect = canvas.getBoundingClientRect();
-    const col = Math.floor((e.clientX - rect.left) / rect.width * COLS);
-    const xs = piece.cells.map(c => c[0]);
-    const target = col - Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
-    let guard = COLS;
-    while (piece.x < target && !collides(piece.cells, piece.x + 1, piece.y) && guard--) piece.x++;
-    while (piece.x > target && !collides(piece.cells, piece.x - 1, piece.y) && guard--) piece.x--;
-    draw();
-  });
-  canvas.addEventListener('click', () => input('rotate'));
-  canvas.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    input('drop');
+  document.getElementById('new').addEventListener('click', () => {
+    if (busy) return;
+    score = 0;
+    selected = -1;
+    msgEl.textContent = '';
+    updateHud();
+    newBoard();
+    render();
   });
 
-  const bindButton = (id, action, repeats) => {
-    const el = document.getElementById(id);
-    el.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      input(action);
-      if (repeats) startRepeat(action);
-    });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
-      el.addEventListener(ev, () => stopRepeat(action)));
-  };
-  bindButton('t-left', 'left', true);
-  bindButton('t-right', 'right', true);
-  bindButton('t-rotate', 'rotate', false);
-  bindButton('t-drop', 'drop', false);
-
-  document.getElementById('start').addEventListener('click', startGame);
-  document.getElementById('pause').addEventListener('click', togglePause);
-
-  board = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
-  draw();
-  msgEl.textContent = 'Press Start to play!';
+  newBoard();
+  render();
 })();
 </script>
 </body>

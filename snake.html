@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake — Maria's Games</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐍</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5441764367815214"
+     crossorigin="anonymous"></script>
+<style>
+  canvas#game {
+    background: #223327;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    width: min(92vw, 400px);
+    height: auto;
+    touch-action: none;
+  }
+  #message { text-align: center; font-weight: 700; margin-top: 12px; min-height: 1.4em; color: var(--accent-dark); font-size: 1.05rem; }
+  #touch {
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    grid-template-rows: repeat(2, 52px);
+    gap: 8px;
+    margin-top: 14px;
+    justify-content: center;
+  }
+  #touch button {
+    font-size: 1.4rem;
+    border: none;
+    border-radius: 12px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  #touch button:active { background: var(--soft); }
+  #t-up { grid-column: 2; grid-row: 1; }
+  #t-left { grid-column: 1; grid-row: 2; }
+  #t-down { grid-column: 2; grid-row: 2; }
+  #t-right { grid-column: 3; grid-row: 2; }
+</style>
+</head>
+<body>
+<header class="site">
+  <h1><a href="index.html">🎲 Maria's Games</a></h1>
+  <a class="back" href="index.html">← All games</a>
+</header>
+<main>
+  <div class="hud">
+    <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+    <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+    <button class="btn" id="start">Start</button>
+  </div>
+  <canvas id="game" width="400" height="400"></canvas>
+  <div id="message">Press Start to play!</div>
+  <div id="touch">
+    <button id="t-up">⬆️</button>
+    <button id="t-left">⬅️</button>
+    <button id="t-down">⬇️</button>
+    <button id="t-right">➡️</button>
+  </div>
+  <p class="controls-hint">Eat the apples and grow — don't hit the walls or yourself!<br>
+  Arrow keys, the buttons, or swipe on the board to steer.</p>
+</main>
+<footer class="site">Made for Maria ❤️</footer>
+<script>
+(function () {
+  const N = 20, SIZE = 20;
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const msgEl = document.getElementById('message');
+
+  let snake, dir, nextDir, food, score, best, running = false, timer = null;
+
+  best = Number(localStorage.getItem('mariasnakebest') || 0);
+  bestEl.textContent = best;
+
+  function placeFood() {
+    do {
+      food = [Math.floor(Math.random() * N), Math.floor(Math.random() * N)];
+    } while (snake.some(([x, y]) => x === food[0] && y === food[1]));
+  }
+
+  function startGame() {
+    snake = [[9, 10], [8, 10], [7, 10]];
+    dir = [1, 0];
+    nextDir = [1, 0];
+    score = 0;
+    running = true;
+    msgEl.textContent = '';
+    scoreEl.textContent = '0';
+    placeFood();
+    restartTimer();
+    draw();
+  }
+
+  function restartTimer() {
+    clearInterval(timer);
+    const speed = Math.max(70, 150 - Math.floor(score / 5) * 10);
+    timer = setInterval(tick, speed);
+  }
+
+  function tick() {
+    dir = nextDir;
+    const head = [snake[0][0] + dir[0], snake[0][1] + dir[1]];
+    if (
+      head[0] < 0 || head[0] >= N || head[1] < 0 || head[1] >= N ||
+      snake.some(([x, y]) => x === head[0] && y === head[1])
+    ) {
+      gameOver();
+      return;
+    }
+    snake.unshift(head);
+    if (head[0] === food[0] && head[1] === food[1]) {
+      score++;
+      scoreEl.textContent = score;
+      if (score > best) {
+        best = score;
+        localStorage.setItem('mariasnakebest', best);
+        bestEl.textContent = best;
+      }
+      placeFood();
+      if (score % 5 === 0) restartTimer();
+    } else {
+      snake.pop();
+    }
+    draw();
+  }
+
+  function gameOver() {
+    running = false;
+    clearInterval(timer);
+    msgEl.textContent = '💔 Ouch! ' + score + ' apple' + (score === 1 ? '' : 's') + '. Press Start!';
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // apple
+    ctx.fillStyle = '#e2707a';
+    ctx.beginPath();
+    ctx.arc(food[0] * SIZE + SIZE / 2, food[1] * SIZE + SIZE / 2, SIZE * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#6fcf7c';
+    ctx.fillRect(food[0] * SIZE + SIZE / 2 - 1, food[1] * SIZE + 2, 3, 5);
+    // snake
+    snake.forEach(([x, y], i) => {
+      ctx.fillStyle = i === 0 ? '#9ae66e' : '#6fcf7c';
+      const pad = i === 0 ? 1 : 2;
+      ctx.beginPath();
+      ctx.roundRect(x * SIZE + pad, y * SIZE + pad, SIZE - 2 * pad, SIZE - 2 * pad, 6);
+      ctx.fill();
+    });
+    // eyes on the head
+    const [hx, hy] = snake[0];
+    ctx.fillStyle = '#223327';
+    ctx.fillRect(hx * SIZE + 5 + dir[0] * 3, hy * SIZE + 5 + dir[1] * 3, 3, 3);
+    ctx.fillRect(hx * SIZE + 12 + dir[0] * 3, hy * SIZE + 12 + dir[1] * 3, 3, 3);
+  }
+
+  function steer(d) {
+    if (!running) return;
+    // no U-turns
+    if (d[0] === -dir[0] && d[1] === -dir[1]) return;
+    nextDir = d;
+  }
+
+  const keyMap = {
+    ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+  };
+  document.addEventListener('keydown', (e) => {
+    if (e.key in keyMap) {
+      e.preventDefault();
+      steer(keyMap[e.key]);
+    }
+  });
+
+  let touchX = 0, touchY = 0;
+  canvas.addEventListener('touchstart', (e) => {
+    touchX = e.touches[0].clientX;
+    touchY = e.touches[0].clientY;
+  }, { passive: true });
+  canvas.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchX;
+    const dy = e.changedTouches[0].clientY - touchY;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+    if (Math.abs(dx) > Math.abs(dy)) steer([dx > 0 ? 1 : -1, 0]);
+    else steer([0, dy > 0 ? 1 : -1]);
+  });
+
+  [['t-up', [0, -1]], ['t-down', [0, 1]], ['t-left', [-1, 0]], ['t-right', [1, 0]]].forEach(([id, d]) => {
+    document.getElementById(id).addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      steer(d);
+    });
+  });
+
+  document.getElementById('start').addEventListener('click', startGame);
+
+  // empty board preview
+  snake = [[9, 10], [8, 10], [7, 10]];
+  dir = [1, 0];
+  placeFood();
+  draw();
+})();
+</script>
+</body>
+</html>
