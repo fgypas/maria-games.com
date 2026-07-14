@@ -9,10 +9,11 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5441764367815214"
      crossorigin="anonymous"></script>
 <style>
+  #board-wrap { position: relative; width: min(92vw, 440px); }
   #board {
     display: grid;
     grid-template-columns: repeat(9, 1fr);
-    width: min(92vw, 440px);
+    width: 100%;
     aspect-ratio: 1;
     border: 3px solid var(--ink);
     border-radius: 6px;
@@ -71,16 +72,21 @@
     <button class="btn" id="new-medium">Medium</button>
     <button class="btn" id="new-hard">Hard</button>
     <button class="btn secondary" id="check">Check</button>
+    <button class="btn secondary" id="mute">🔊</button>
   </div>
-  <div id="board"></div>
+  <div id="board-wrap"><div id="board"></div></div>
   <div id="numpad"></div>
   <div id="message"></div>
   <p class="controls-hint">Tap a cell, then a number. Use ✕ (or 0) to erase. Keyboard 1–9 works too.</p>
 </main>
 <footer class="site">Made for Maria ❤️</footer>
+<script src="fx.js"></script>
 <script>
 (function () {
   const boardEl = document.getElementById('board');
+  const wrapEl = document.getElementById('board-wrap');
+  const fx = FX.overlay(wrapEl);
+  FX.muteButton(document.getElementById('mute'));
   const msgEl = document.getElementById('message');
   let solution = [];   // 81 numbers, the full solved grid
   let puzzle = [];     // 81 numbers, 0 = empty (the givens)
@@ -189,6 +195,7 @@
   function setNumber(val) {
     if (selected < 0 || puzzle[selected] !== 0) return;
     entries[selected] = val;
+    FX.sounds.click();
     msgEl.textContent = '';
     render();
     if (val !== 0 && !entries.includes(0)) checkBoard(true);
@@ -207,10 +214,16 @@
     }
     if (wrong === 0 && empty === 0) {
       msgEl.textContent = '🎉 Bravo Maria! Solved!';
+      fx.confetti();
+      fx.floatText(wrapEl.clientWidth / 2, wrapEl.clientHeight / 2, '🎉 Solved!', 30);
+      FX.sounds.fanfare();
+      FX.shake(wrapEl);
     } else if (wrong === 0) {
       msgEl.textContent = auto ? '' : 'Looking good so far! ' + empty + ' to go.';
+      if (!auto) FX.sounds.chime(1);
     } else {
       msgEl.textContent = wrong + ' cell' + (wrong > 1 ? 's are' : ' is') + ' wrong (shown in red).';
+      FX.sounds.buzz();
     }
   }
 

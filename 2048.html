@@ -9,6 +9,7 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5441764367815214"
      crossorigin="anonymous"></script>
 <style>
+  #board-wrap { position: relative; width: min(92vw, 420px); }
   #board {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -16,7 +17,7 @@
     background: #bbada0;
     border-radius: 12px;
     padding: 10px;
-    width: min(92vw, 420px);
+    width: 100%;
     aspect-ratio: 1;
     touch-action: none;
     user-select: none;
@@ -59,18 +60,23 @@
     <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
     <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
     <button class="btn" id="new">New Game</button>
+    <button class="btn secondary" id="mute">🔊</button>
   </div>
-  <div id="board"></div>
+  <div id="board-wrap"><div id="board"></div></div>
   <div id="message"></div>
   <p class="controls-hint">Swipe on the board or use the arrow keys.</p>
 </main>
 <footer class="site">Made for Maria ❤️</footer>
+<script src="fx.js"></script>
 <script>
 (function () {
   const boardEl = document.getElementById('board');
+  const wrapEl = document.getElementById('board-wrap');
   const scoreEl = document.getElementById('score');
   const bestEl = document.getElementById('best');
   const msgEl = document.getElementById('message');
+  const fx = FX.overlay(wrapEl);
+  FX.muteButton(document.getElementById('mute'));
   let grid, score, best, over, won;
 
   best = Number(localStorage.getItem('maria2048best') || 0);
@@ -113,14 +119,18 @@
     }
   }
 
-  // Slide one row of 4 values toward index 0. Returns [newRow, gained, moved].
+  // Slide one row of 4 values toward index 0.
+  // Returns [newRow, gained, moved, mergedAt] where mergedAt lists the
+  // positions in newRow where two tiles fused.
   function slideRow(row) {
     const vals = row.filter(v => v !== 0);
     const out = [];
+    const mergedAt = [];
     let gained = 0;
     for (let i = 0; i < vals.length; i++) {
       if (i + 1 < vals.length && vals[i] === vals[i + 1]) {
         out.push(vals[i] * 2);
+        mergedAt.push(out.length - 1);
         gained += vals[i] * 2;
         i++;
       } else {
@@ -129,14 +139,17 @@
     }
     while (out.length < 4) out.push(0);
     const moved = out.some((v, i) => v !== row[i]);
-    return [out, gained, moved];
+    return [out, gained, moved, mergedAt];
   }
 
   // dir: 0=left, 1=right, 2=up, 3=down
   function move(dir) {
     if (over) return;
     let movedAny = false;
+    let totalGained = 0;
+    let biggestMerge = 0;
     const merged = [];
+    const fusions = [];   // grid indices where two tiles fused, for the FX
     for (let line = 0; line < 4; line++) {
       const idxs = [];
       for (let k = 0; k < 4; k++) {
@@ -146,27 +159,50 @@
         if (dir === 3) idxs.push((3 - k) * 4 + line);
       }
       const row = idxs.map(i => grid[i]);
-      const [out, gained, moved] = slideRow(row);
+      const [out, gained, moved, mergedAt] = slideRow(row);
       if (moved) {
         movedAny = true;
         idxs.forEach((gi, k) => {
           if (out[k] !== row[k] && out[k] !== 0) merged.push(gi);
           grid[gi] = out[k];
         });
+        mergedAt.forEach(k => {
+          fusions.push(idxs[k]);
+          biggestMerge = Math.max(biggestMerge, out[k]);
+        });
         score += gained;
+        totalGained += gained;
       }
     }
     if (!movedAny) return;
     const newIdx = addTile();
     if (newIdx >= 0) merged.push(newIdx);
     render(merged);
+
+    // Juice: explosions on fused tiles, floating score, drama on big merges
+    if (fusions.length) {
+      fusions.forEach(gi => {
+        const el = boardEl.children[gi];
+        fx.boom(el.offsetLeft + el.offsetWidth / 2, el.offsetTop + el.offsetHeight / 2,
+          getComputedStyle(el).backgroundColor, biggestMerge >= 256 ? 12 : 7);
+      });
+      const first = boardEl.children[fusions[0]];
+      fx.floatText(first.offsetLeft + first.offsetWidth / 2, first.offsetTop, '+' + totalGained,
+        biggestMerge >= 256 ? 26 : 20);
+      FX.sounds.pop(Math.min(8, Math.log2(biggestMerge)));
+      if (biggestMerge >= 512) { FX.shake(wrapEl); FX.sounds.blast(); }
+    }
     if (!won && grid.includes(2048)) {
       won = true;
       msgEl.textContent = '🎉 2048! Bravo Maria! Keep going!';
+      fx.confetti();
+      FX.sounds.fanfare();
+      FX.shake(wrapEl);
     }
     if (!canMove()) {
       over = true;
       msgEl.textContent = '💔 No more moves — final score ' + score + '. Try again!';
+      FX.sounds.sad();
     }
   }
 

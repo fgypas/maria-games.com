@@ -9,13 +9,15 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5441764367815214"
      crossorigin="anonymous"></script>
 <style>
+  #game-wrap { position: relative; width: min(92vw, 400px); }
   canvas#game {
     background: #223327;
     border-radius: 10px;
     box-shadow: var(--shadow);
-    width: min(92vw, 400px);
+    width: 100%;
     height: auto;
     touch-action: none;
+    display: block;
   }
   #message { text-align: center; font-weight: 700; margin-top: 12px; min-height: 1.4em; color: var(--accent-dark); font-size: 1.05rem; }
   #touch {
@@ -54,8 +56,9 @@
     <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
     <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
     <button class="btn" id="start">Start</button>
+    <button class="btn secondary" id="mute">🔊</button>
   </div>
-  <canvas id="game" width="400" height="400"></canvas>
+  <div id="game-wrap"><canvas id="game" width="400" height="400"></canvas></div>
   <div id="message">Press Start to play!</div>
   <div id="touch">
     <button id="t-up">⬆️</button>
@@ -67,9 +70,15 @@
   Arrow keys, the buttons, or swipe on the board to steer.</p>
 </main>
 <footer class="site">Made for Maria ❤️</footer>
+<script src="fx.js"></script>
 <script>
 (function () {
   const N = 20, SIZE = 20;
+  const gameWrap = document.getElementById('game-wrap');
+  const fx = FX.overlay(gameWrap);
+  FX.muteButton(document.getElementById('mute'));
+  const cellPx = () => gameWrap.clientWidth / N;
+  let beatBest = false;
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const scoreEl = document.getElementById('score');
@@ -92,6 +101,7 @@
     dir = [1, 0];
     nextDir = [1, 0];
     score = 0;
+    beatBest = false;
     running = true;
     msgEl.textContent = '';
     scoreEl.textContent = '0';
@@ -120,10 +130,23 @@
     if (head[0] === food[0] && head[1] === food[1]) {
       score++;
       scoreEl.textContent = score;
+      const px = cellPx();
+      fx.boom((head[0] + 0.5) * px, (head[1] + 0.5) * px, '#e2707a', 8);
+      FX.sounds.pop(Math.min(10, score % 12));
+      if (score % 10 === 0) {
+        fx.floatText(gameWrap.clientWidth / 2, gameWrap.clientHeight / 3, score + ' apples! 🍎', 26);
+        FX.sounds.chime(3);
+      }
       if (score > best) {
         best = score;
         localStorage.setItem('mariasnakebest', best);
         bestEl.textContent = best;
+        if (!beatBest && best > 5) {
+          beatBest = true;
+          fx.confetti(50);
+          fx.floatText(gameWrap.clientWidth / 2, gameWrap.clientHeight / 2, '🏆 New record!', 26);
+          FX.sounds.fanfare();
+        }
       }
       placeFood();
       if (score % 5 === 0) restartTimer();
@@ -136,6 +159,11 @@
   function gameOver() {
     running = false;
     clearInterval(timer);
+    const px = cellPx();
+    const [hx, hy] = snake[0];
+    fx.boom((hx + 0.5) * px, (hy + 0.5) * px, '#9ae66e', 16);
+    FX.shake(gameWrap);
+    FX.sounds.sad();
     msgEl.textContent = '💔 Ouch! ' + score + ' apple' + (score === 1 ? '' : 's') + '. Press Start!';
   }
 

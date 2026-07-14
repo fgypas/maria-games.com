@@ -134,6 +134,15 @@ button.btn.secondary:hover { background: #e4d8c4; }
 
 .controls-hint { color: #8a7a6a; font-size: 0.85rem; text-align: center; margin-top: 10px; }
 
+.fx-shake { animation: fxshake 0.4s ease; }
+@keyframes fxshake {
+  0%, 100% { translate: 0 0; }
+  20% { translate: -6px 3px; }
+  40% { translate: 5px -4px; }
+  60% { translate: -4px -3px; }
+  80% { translate: 3px 4px; }
+}
+
 footer.site {
   margin-top: 32px;
   padding: 16px;

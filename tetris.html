@@ -10,6 +10,7 @@
      crossorigin="anonymous"></script>
 <style>
   #wrap { display: flex; gap: 16px; align-items: flex-start; justify-content: center; }
+  #game-wrap { position: relative; }
   canvas#game {
     background: #2d2733;
     border-radius: 10px;
@@ -17,6 +18,7 @@
     width: min(60vw, 280px);
     height: auto;
     touch-action: none;
+    display: block;
   }
   #side { display: flex; flex-direction: column; gap: 10px; align-items: center; }
   canvas#next { background: #2d2733; border-radius: 10px; width: 90px; height: 90px; }
@@ -57,12 +59,13 @@
     <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
   </div>
   <div id="wrap">
-    <canvas id="game" width="200" height="400"></canvas>
+    <div id="game-wrap"><canvas id="game" width="200" height="400"></canvas></div>
     <div id="side">
       <div class="label">Next</div>
       <canvas id="next" width="80" height="80"></canvas>
       <button class="btn" id="start">Start</button>
       <button class="btn secondary" id="pause">Pause</button>
+      <button class="btn secondary" id="mute">🔊</button>
     </div>
   </div>
   <div id="message"></div>
@@ -76,9 +79,15 @@
   Mouse: move to steer, click to rotate, right-click to drop instantly.</p>
 </main>
 <footer class="site">Made for Maria ❤️</footer>
+<script src="fx.js"></script>
 <script>
 (function () {
   const COLS = 10, ROWS = 20, SIZE = 20;
+  const gameWrap = document.getElementById('game-wrap');
+  const fx = FX.overlay(gameWrap);
+  FX.muteButton(document.getElementById('mute'));
+  // canvas is CSS-scaled: convert board cells to overlay pixels
+  const cellPx = () => gameWrap.clientWidth / COLS;
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const nextCanvas = document.getElementById('next');
@@ -170,10 +179,27 @@
     const full = [];
     for (let r = 0; r < ROWS; r++) if (board[r].every(v => v)) full.push(r);
     if (full.length === 0) {
+      FX.sounds.thud();
       spawn();
       return;
     }
-    // Glow-flash the full rows before removing them
+    // Explode the full rows into particles while they glow-flash
+    const px = cellPx();
+    full.forEach(r => {
+      for (let c = 0; c < COLS; c++) {
+        fx.boom((c + 0.5) * px, (r + 0.5) * px, board[r][c], full.length >= 3 ? 9 : 5);
+      }
+    });
+    const points = [0, 100, 300, 500, 800][full.length] * level;
+    fx.floatText(gameWrap.clientWidth / 2, full[0] * px, '+' + points, full.length >= 3 ? 26 : 20);
+    if (full.length === 4) {
+      FX.shake(gameWrap);
+      FX.sounds.blast();
+      fx.confetti(50);
+    } else {
+      FX.sounds.chime(full.length);
+      if (full.length === 3) FX.shake(gameWrap);
+    }
     piece = null;
     animating = true;
     let flashes = 0;
@@ -186,11 +212,12 @@
         [...full].sort((a, b) => b - a).forEach(r => board.splice(r, 1));
         for (let i = 0; i < full.length; i++) board.unshift(new Array(COLS).fill(null));
         lines += full.length;
-        score += [0, 100, 300, 500, 800][full.length] * level;
+        score += points;
         const newLevel = Math.floor(lines / 10) + 1;
         if (newLevel !== level) {
           level = newLevel;
           restartTimer();
+          FX.sounds.fanfare();
         }
         updateHud();
         spawn();
@@ -292,6 +319,7 @@
   function gameOver() {
     running = false;
     clearInterval(dropTimer);
+    FX.sounds.sad();
     msgEl.textContent = '💔 Game over — score ' + score + '. Press Start to play again!';
   }
 
@@ -306,9 +334,9 @@
     if (!running || paused || animating || !piece) return;
     if (action === 'left') moveX(-1);
     if (action === 'right') moveX(1);
-    if (action === 'rotate') rotate();
+    if (action === 'rotate') { rotate(); FX.sounds.click(); }
     if (action === 'down') step();
-    if (action === 'drop') hardDrop();
+    if (action === 'drop') { FX.sounds.whoosh(); hardDrop(); }
     draw();
   }
 

@@ -9,13 +9,14 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5441764367815214"
      crossorigin="anonymous"></script>
 <style>
+  #board-wrap { position: relative; width: min(92vw, 440px); }
   #board {
     display: grid;
     gap: 2px;
     background: #b0a290;
     border-radius: 8px;
     padding: 4px;
-    width: min(92vw, 440px);
+    width: 100%;
     user-select: none;
     touch-action: manipulation;
   }
@@ -58,16 +59,21 @@
     <div class="stat"><div class="label">Mines</div><div class="value" id="mines-left">10</div></div>
     <div class="stat"><div class="label">Time</div><div class="value" id="time">0</div></div>
     <button class="btn secondary" id="flag-toggle">🚩 Flag mode</button>
+    <button class="btn secondary" id="mute">🔊</button>
   </div>
-  <div id="board"></div>
+  <div id="board-wrap"><div id="board"></div></div>
   <div id="message"></div>
   <p class="controls-hint">Tap to reveal, right-click to flag a mine.<br>
   On the phone, switch on 🚩 Flag mode to place flags by tapping. First tap is always safe.</p>
 </main>
 <footer class="site">Made for Maria ❤️</footer>
+<script src="fx.js"></script>
 <script>
 (function () {
   const boardEl = document.getElementById('board');
+  const wrapEl = document.getElementById('board-wrap');
+  const fx = FX.overlay(wrapEl);
+  FX.muteButton(document.getElementById('mute'));
   const minesEl = document.getElementById('mines-left');
   const timeEl = document.getElementById('time');
   const msgEl = document.getElementById('message');
@@ -128,6 +134,7 @@
       timer = setInterval(() => { seconds++; timeEl.textContent = seconds; }, 1000);
     }
     if (mine[i]) { lose(i); return; }
+    FX.sounds.click();
     const stack = [i];
     while (stack.length) {
       const j = stack.pop();
@@ -142,6 +149,7 @@
   function toggleFlag(i) {
     if (over || open[i] || firstClick) return;
     flag[i] = !flag[i];
+    FX.sounds.tick();
     render();
     updateMines();
   }
@@ -155,6 +163,13 @@
     clearInterval(timer);
     for (let i = 0; i < W * H; i++) if (mine[i]) open[i] = true;
     render(hit);
+    const el = boardEl.children[hit];
+    const x = el.offsetLeft + el.offsetWidth / 2, y = el.offsetTop + el.offsetHeight / 2;
+    fx.boom(x, y, '#e2707a', 22);
+    fx.boom(x, y, '#f2994a', 14);
+    FX.shake(wrapEl);
+    FX.sounds.blast();
+    setTimeout(FX.sounds.sad, 350);
     msgEl.textContent = '💥 Boom! Try again — pick a difficulty above.';
   }
 
@@ -165,6 +180,9 @@
     for (let i = 0; i < W * H; i++) if (mine[i]) flag[i] = true;
     render();
     updateMines();
+    fx.confetti();
+    fx.floatText(wrapEl.clientWidth / 2, wrapEl.clientHeight / 2, '🎉 ' + seconds + 's!', 28);
+    FX.sounds.fanfare();
     msgEl.textContent = '🎉 Bravo Maria! Cleared in ' + seconds + 's!';
   }
 
