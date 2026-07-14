@@ -34,6 +34,18 @@
   .g3 { background: #4cc9f0; }
   .g4 { background: #b388ff; border-radius: 50% 50% 22% 22%; }
   .g5 { background: #f2994a; border-radius: 22% 50% 22% 50%; }
+  .g6 { background: #f4efe6; border-radius: 38%; }
+  .gem.cross {
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.55) 0 4px, transparent 4px 9px);
+    animation: glowpulse 1.1s ease-in-out infinite;
+  }
+  @keyframes glowpulse { 50% { filter: brightness(1.4); box-shadow: 0 0 12px rgba(255,255,255,0.9); } }
+  .gem.rainbow {
+    background: conic-gradient(#e2707a, #f2c94c, #6fcf7c, #4cc9f0, #b388ff, #f2994a, #e2707a);
+    animation: spinbow 2.5s linear infinite;
+    box-shadow: 0 0 10px rgba(255,255,255,0.7);
+  }
+  @keyframes spinbow { to { rotate: 1turn; } }
   .gem.selected { outline: 3px solid #fff; outline-offset: 1px; scale: 1.12; }
   .gem.burst { animation: gemburst 0.24s ease forwards; }
   @keyframes gemburst {
@@ -54,59 +66,125 @@
     <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
     <button class="btn" id="new">New Game</button>
   </div>
+  <div class="hud">
+    <div class="stat"><div class="label">Level</div><div class="value" id="level">1</div></div>
+    <div class="stat"><div class="label">Moves</div><div class="value" id="moves">20</div></div>
+    <div class="stat"><div class="label">Goal</div><div class="value" id="goal">0/700</div></div>
+  </div>
   <div id="board"></div>
   <div id="message"></div>
-  <p class="controls-hint">Swap two neighbouring gems to line up 3 or more.<br>
-  Tap one gem then a neighbour — or just swipe a gem in any direction. Chains score extra!</p>
+  <p class="controls-hint">Reach the goal before your moves run out — each level asks for more!<br>
+  Match <b>4</b> to forge a ✨ striped gem (blasts its row + column when matched).<br>
+  Match <b>5</b> to forge a 🌈 rainbow gem (swap it with any gem to clear that whole colour).<br>
+  Tap one gem then a neighbour — or swipe a gem in any direction. Chains score extra!</p>
 </main>
 <footer class="site">Made for Maria ❤️</footer>
 <script>
 (function () {
-  const N = 8, TYPES = 6;
+  const N = 8;
+  const RAINBOW = 99;
   const boardEl = document.getElementById('board');
   const scoreEl = document.getElementById('score');
   const bestEl = document.getElementById('best');
+  const levelEl = document.getElementById('level');
+  const movesEl = document.getElementById('moves');
+  const goalEl = document.getElementById('goal');
   const msgEl = document.getElementById('message');
-  let board = [];        // N*N gem types 0..5, -1 = empty while resolving
-  let score = 0, best, selected = -1, busy = false;
+
+  // Gem encoding: 0..6 normal, 10+t striped cross of colour t, 99 rainbow
+  let board = [];
+  let score = 0, levelScore = 0, level = 1, moves = 20, best;
+  let selected = -1, busy = false, over = false;
 
   best = Number(localStorage.getItem('mariagemsmatchbest') || 0);
   bestEl.textContent = best;
 
   const row = i => Math.floor(i / N), col = i => i % N;
+  const colorOf = v => v === RAINBOW ? -2 : (v >= 10 ? v - 10 : v);
+  const types = () => level >= 4 ? 7 : 6;
+  const goal = () => 700 + 500 * (level - 1);
+  const movesForLevel = () => Math.max(15, 21 - level);
   const adjacent = (a, b) =>
     (row(a) === row(b) && Math.abs(col(a) - col(b)) === 1) ||
     (col(a) === col(b) && Math.abs(row(a) - row(b)) === 1);
 
-  function findMatches(b) {
-    const m = new Set();
+  // Runs of 3+ equal colours, horizontal and vertical
+  function findRuns(b) {
+    const runs = [];
     for (let r = 0; r < N; r++) {
-      for (let c = 0; c < N - 2; c++) {
-        const i = r * N + c, v = b[i];
-        if (v >= 0 && b[i + 1] === v && b[i + 2] === v) {
-          let k = c;
-          while (k < N && b[r * N + k] === v) { m.add(r * N + k); k++; }
-        }
+      let c = 0;
+      while (c < N - 2) {
+        const v = colorOf(b[r * N + c]);
+        if (v >= 0) {
+          let k = c + 1;
+          while (k < N && colorOf(b[r * N + k]) === v) k++;
+          if (k - c >= 3) runs.push({ color: v, cells: Array.from({ length: k - c }, (_, j) => r * N + c + j) });
+          c = k;
+        } else c++;
       }
     }
     for (let c = 0; c < N; c++) {
-      for (let r = 0; r < N - 2; r++) {
-        const i = r * N + c, v = b[i];
-        if (v >= 0 && b[i + N] === v && b[i + 2 * N] === v) {
-          let k = r;
-          while (k < N && b[k * N + c] === v) { m.add(k * N + c); k++; }
+      let r = 0;
+      while (r < N - 2) {
+        const v = colorOf(b[r * N + c]);
+        if (v >= 0) {
+          let k = r + 1;
+          while (k < N && colorOf(b[k * N + c]) === v) k++;
+          if (k - r >= 3) runs.push({ color: v, cells: Array.from({ length: k - r }, (_, j) => (r + j) * N + c) });
+          r = k;
+        } else r++;
+      }
+    }
+    return runs;
+  }
+
+  // Cross gems blast their row+column; a rainbow caught in a blast clears a random colour
+  function expandSpecials(removal) {
+    const queue = [...removal];
+    while (queue.length) {
+      const i = queue.pop();
+      const v = board[i];
+      if (v >= 10 && v < 20) {
+        const r = row(i), c = col(i);
+        for (let k = 0; k < N; k++) {
+          for (const j of [r * N + k, k * N + c]) {
+            if (!removal.has(j)) { removal.add(j); queue.push(j); }
+          }
+        }
+      } else if (v === RAINBOW) {
+        const t = Math.floor(Math.random() * types());
+        for (let j = 0; j < N * N; j++) {
+          if (colorOf(board[j]) === t && !removal.has(j)) { removal.add(j); queue.push(j); }
         }
       }
     }
-    return m;
+  }
+
+  // One resolve step: find runs, decide removals and special-gem creations
+  function stepMatches(prefPos) {
+    const runs = findRuns(board);
+    if (runs.length === 0) return null;
+    const removal = new Set();
+    runs.forEach(run => run.cells.forEach(i => removal.add(i)));
+    const creations = [];
+    runs.forEach(run => {
+      if (run.cells.length >= 4) {
+        const pos = (prefPos != null && run.cells.includes(prefPos))
+          ? prefPos : run.cells[Math.floor(run.cells.length / 2)];
+        creations.push({ pos, v: run.cells.length >= 5 ? RAINBOW : 10 + run.color });
+      }
+    });
+    expandSpecials(removal);
+    return { removal, creations };
   }
 
   function hasMove() {
+    if (board.includes(RAINBOW)) return true;
     for (let i = 0; i < N * N; i++) {
       for (const j of [i + 1, i + N]) {
         if (j >= N * N || (j === i + 1 && col(i) === N - 1)) continue;
         [board[i], board[j]] = [board[j], board[i]];
-        const ok = findMatches(board).size > 0;
+        const ok = findRuns(board).length > 0;
         [board[i], board[j]] = [board[j], board[i]];
         if (ok) return true;
       }
@@ -115,12 +193,12 @@
   }
 
   function newBoard() {
-    // Fill avoiding ready-made matches, then make sure a move exists
+    const T = types();
     do {
       for (let i = 0; i < N * N; i++) {
         let v;
         do {
-          v = Math.floor(Math.random() * TYPES);
+          v = Math.floor(Math.random() * T);
         } while (
           (col(i) >= 2 && board[i - 1] === v && board[i - 2] === v) ||
           (row(i) >= 2 && board[i - N] === v && board[i - 2 * N] === v)
@@ -134,7 +212,10 @@
     boardEl.innerHTML = '';
     for (let i = 0; i < N * N; i++) {
       const d = document.createElement('div');
-      d.className = 'gem g' + board[i];
+      const v = board[i];
+      if (v === RAINBOW) d.className = 'gem rainbow';
+      else if (v >= 10) d.className = 'gem g' + (v - 10) + ' cross';
+      else d.className = 'gem g' + v;
       if (i === selected) d.classList.add('selected');
       d.dataset.i = i;
       boardEl.appendChild(d);
@@ -143,6 +224,9 @@
 
   function updateHud() {
     scoreEl.textContent = score;
+    levelEl.textContent = level;
+    movesEl.textContent = moves;
+    goalEl.textContent = Math.min(levelScore, goal()) + '/' + goal();
     if (score > best) {
       best = score;
       localStorage.setItem('mariagemsmatchbest', best);
@@ -150,39 +234,38 @@
     }
   }
 
-  // Returns how far each gem fell (in cells) so the drop can be animated
   function gravityRefill() {
-    const moves = [];
+    const movesOut = [];
+    const T = types();
     for (let c = 0; c < N; c++) {
       let write = N - 1;
       for (let r = N - 1; r >= 0; r--) {
         if (board[r * N + c] >= 0) {
           if (write !== r) {
             board[write * N + c] = board[r * N + c];
-            moves.push({ i: write * N + c, dy: write - r });
+            movesOut.push({ i: write * N + c, dy: write - r });
           }
           write--;
         }
       }
-      // Fresh gems drop in together from above the top edge
       for (let r = write; r >= 0; r--) {
-        board[r * N + c] = Math.floor(Math.random() * TYPES);
-        moves.push({ i: r * N + c, dy: write + 1 });
+        board[r * N + c] = Math.floor(Math.random() * T);
+        movesOut.push({ i: r * N + c, dy: write + 1 });
       }
     }
-    return moves;
+    return movesOut;
   }
 
-  function animateFalls(moves) {
-    if (moves.length === 0) return;
+  function animateFalls(mv) {
+    if (mv.length === 0) return;
     const pitch = boardEl.children[N].offsetTop - boardEl.children[0].offsetTop;
-    moves.forEach(({ i, dy }) => {
+    mv.forEach(({ i, dy }) => {
       const el = boardEl.children[i];
       el.style.transition = 'none';
       el.style.translate = '0 ' + (-dy * pitch) + 'px';
     });
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      moves.forEach(({ i }) => {
+      mv.forEach(({ i }) => {
         const el = boardEl.children[i];
         el.style.transition = 'translate 0.24s cubic-bezier(0.3, 0.9, 0.4, 1.15)';
         el.style.translate = '0 0';
@@ -190,30 +273,50 @@
     }));
   }
 
-  function cascade(mult) {
-    const m = findMatches(board);
-    if (m.size === 0) {
-      busy = false;
-      if (mult > 2) msgEl.textContent = '✨ Chain x' + (mult - 1) + '!';
-      if (!hasMove()) {
-        msgEl.textContent = '🔀 No moves left — shuffling!';
-        setTimeout(() => { newBoard(); render(); }, 600);
-      }
-      return;
-    }
-    score += m.size * 10 * mult;
+  function applyStep(removal, creations, mult) {
+    const gain = removal.size * 10 * mult;
+    score += gain;
+    levelScore += gain;
     updateHud();
-    m.forEach(i => board[i] = -1);
-    m.forEach(i => boardEl.children[i].classList.add('burst'));
+    removal.forEach(i => { board[i] = -1; });
+    const created = new Set(creations.map(c => c.pos));
+    removal.forEach(i => { if (!created.has(i)) boardEl.children[i].classList.add('burst'); });
+    creations.forEach(c => { board[c.pos] = c.v; });
     setTimeout(() => {
-      const moves = gravityRefill();
+      const mv = gravityRefill();
       render();
-      animateFalls(moves);
+      animateFalls(mv);
       setTimeout(() => cascade(mult + 1), 280);
     }, 240);
   }
 
-  // Slide the two gems into each other's places
+  function cascade(mult, prefPos) {
+    const res = stepMatches(prefPos);
+    if (res) { applyStep(res.removal, res.creations, mult); return; }
+    busy = false;
+    if (mult > 2) msgEl.textContent = '✨ Chain x' + (mult - 1) + '!';
+    if (levelScore >= goal()) { levelUp(); return; }
+    if (moves <= 0) { gameOver(); return; }
+    if (!hasMove()) {
+      msgEl.textContent = '🔀 No moves left on the board — shuffling!';
+      setTimeout(() => { newBoard(); render(); }, 600);
+    }
+  }
+
+  function levelUp() {
+    levelScore = Math.max(0, levelScore - goal());
+    level++;
+    moves = movesForLevel();
+    msgEl.textContent = '🏆 Level ' + level + '! Goal: ' + goal() + ' points in ' + moves + ' moves.';
+    updateHud();
+  }
+
+  function gameOver() {
+    over = true;
+    updateHud();
+    msgEl.textContent = '💔 Out of moves! Final score ' + score + ' (level ' + level + '). Press New Game!';
+  }
+
   function animateSwap(a, b, done) {
     const ea = boardEl.children[a], eb = boardEl.children[b];
     const dx = eb.offsetLeft - ea.offsetLeft, dy = eb.offsetTop - ea.offsetTop;
@@ -225,11 +328,31 @@
   }
 
   function trySwap(a, b) {
-    if (busy || !adjacent(a, b)) return;
+    if (busy || over || !adjacent(a, b)) return;
     busy = true;
     selected = -1;
+    msgEl.textContent = '';
+
+    // Rainbow swap is always a valid move: it devours the other gem's colour
+    if (board[a] === RAINBOW || board[b] === RAINBOW) {
+      moves--;
+      animateSwap(a, b, () => {
+        const removal = new Set([a, b]);
+        if (board[a] === RAINBOW && board[b] === RAINBOW) {
+          for (let i = 0; i < N * N; i++) removal.add(i);   // double rainbow!
+          msgEl.textContent = '🌈🌈 Double rainbow — whole board!';
+        } else {
+          const t = colorOf(board[a] === RAINBOW ? board[b] : board[a]);
+          for (let i = 0; i < N * N; i++) if (colorOf(board[i]) === t) removal.add(i);
+        }
+        expandSpecials(removal);
+        applyStep(removal, [], 1);
+      });
+      return;
+    }
+
     [board[a], board[b]] = [board[b], board[a]];
-    if (findMatches(board).size === 0) {
+    if (findRuns(board).length === 0) {
       // Not a valid move: slide over, then slide back
       [board[a], board[b]] = [board[b], board[a]];
       animateSwap(a, b, () => {
@@ -239,10 +362,11 @@
       });
       return;
     }
-    msgEl.textContent = '';
+    moves--;
+    updateHud();
     animateSwap(a, b, () => {
       render();
-      cascade(1);
+      cascade(1, b);
     });
   }
 
@@ -250,16 +374,15 @@
   let downI = -1, downX = 0, downY = 0;
   boardEl.addEventListener('pointerdown', (e) => {
     const t = e.target.closest('.gem');
-    if (!t || busy) return;
+    if (!t || busy || over) return;
     downI = Number(t.dataset.i);
     downX = e.clientX;
     downY = e.clientY;
   });
   boardEl.addEventListener('pointerup', (e) => {
-    if (downI < 0 || busy) { downI = -1; return; }
+    if (downI < 0 || busy || over) { downI = -1; return; }
     const dx = e.clientX - downX, dy = e.clientY - downY;
     if (Math.max(Math.abs(dx), Math.abs(dy)) > 18) {
-      // Swipe: swap with the neighbour in that direction
       let target = -1;
       if (Math.abs(dx) > Math.abs(dy)) {
         if (dx > 0 && col(downI) < N - 1) target = downI + 1;
@@ -270,7 +393,6 @@
       }
       if (target >= 0) trySwap(downI, target);
     } else {
-      // Tap: select, then tap a neighbour
       if (selected < 0) {
         selected = downI;
         render();
@@ -289,16 +411,20 @@
 
   document.getElementById('new').addEventListener('click', () => {
     if (busy) return;
-    score = 0;
+    score = 0; levelScore = 0; level = 1;
+    moves = movesForLevel();
     selected = -1;
+    over = false;
     msgEl.textContent = '';
-    updateHud();
     newBoard();
     render();
+    updateHud();
   });
 
+  moves = movesForLevel();
   newBoard();
   render();
+  updateHud();
 })();
 </script>
 </body>
