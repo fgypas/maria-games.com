@@ -134,6 +134,34 @@ button.btn.secondary:hover { background: #e4d8c4; }
 
 .controls-hint { color: #8a7a6a; font-size: 0.85rem; text-align: center; margin-top: 10px; }
 
+/* Break-reminder popup */
+.fxb-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(58, 49, 69, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: fxbfade 0.3s ease;
+}
+.fxb-card {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 28px 24px;
+  max-width: 340px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  animation: fxbpop 0.45s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.fxb-card h2 { margin-bottom: 10px; color: var(--ink); }
+.fxb-card p { color: #8a7a6a; line-height: 1.55; margin-bottom: 18px; }
+.fxb-emoji { font-size: 3.2rem; margin-bottom: 8px; animation: fxbbounce 1.4s ease infinite; }
+@keyframes fxbfade { from { opacity: 0; } }
+@keyframes fxbpop { from { scale: 0.6; opacity: 0; } }
+@keyframes fxbbounce { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
+
 .fx-shake { animation: fxshake 0.4s ease; }
 @keyframes fxshake {
   0%, 100% { translate: 0 0; }

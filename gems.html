@@ -142,6 +142,7 @@
   Tip: swap a rainbow into a stone to shatter every stone at once. Chains score extra!</p>
 </main>
 <footer class="site">Made for Maria ❤️</footer>
+<script src="fx.js"></script>
 <script>
 (function () {
   const N = 10;
@@ -575,6 +576,7 @@
     over = true;
     updateHud();
     sadSound();
+    FX.countGame();
     msgEl.textContent = '💔 Out of moves! Final score ' + score + ' (level ' + level + '). Press New Game!';
   }
 

@@ -218,6 +218,7 @@
       fx.floatText(wrapEl.clientWidth / 2, wrapEl.clientHeight / 2, '🎉 Solved!', 30);
       FX.sounds.fanfare();
       FX.shake(wrapEl);
+      FX.countGame();
     } else if (wrong === 0) {
       msgEl.textContent = auto ? '' : 'Looking good so far! ' + empty + ' to go.';
       if (!auto) FX.sounds.chime(1);

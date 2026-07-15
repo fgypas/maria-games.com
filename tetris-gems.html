@@ -465,6 +465,7 @@
     clearInterval(clockTimer);
     updateHud();
     FX.sounds.sad();
+    FX.countGame();
     msgEl.textContent = '⏰ Time is up! ' + gems + ' gems, score ' + score + '. Press Start!';
   }
 

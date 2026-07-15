@@ -164,6 +164,7 @@
     fx.boom((hx + 0.5) * px, (hy + 0.5) * px, '#9ae66e', 16);
     FX.shake(gameWrap);
     FX.sounds.sad();
+    FX.countGame();
     msgEl.textContent = '💔 Ouch! ' + score + ' apple' + (score === 1 ? '' : 's') + '. Press Start!';
   }
 

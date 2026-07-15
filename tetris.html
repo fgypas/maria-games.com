@@ -320,6 +320,7 @@
     running = false;
     clearInterval(dropTimer);
     FX.sounds.sad();
+    FX.countGame();
     msgEl.textContent = '💔 Game over — score ' + score + '. Press Start to play again!';
   }
 

@@ -130,5 +130,37 @@ window.FX = (function () {
     };
   }
 
-  return { tone, sounds, muteButton, shake, overlay };
+  // Gentle break reminder: after every 10 finished games in a day,
+  // suggest some water. Call countGame() whenever a round ends.
+  function countGame() {
+    let d = { day: '', n: 0 };
+    try { d = JSON.parse(localStorage.getItem('mariagamesplayed')) || d; } catch (e) {}
+    const today = new Date().toISOString().slice(0, 10);
+    if (d.day !== today) d = { day: today, n: 0 };
+    d.n++;
+    localStorage.setItem('mariagamesplayed', JSON.stringify(d));
+    if (d.n % 10 === 0) setTimeout(() => breakPopup(d.n), 1400);
+  }
+
+  function breakPopup(n) {
+    if (document.querySelector('.fxb-back')) return;
+    const back = document.createElement('div');
+    back.className = 'fxb-back';
+    back.innerHTML =
+      '<div class="fxb-card">' +
+      '<div class="fxb-emoji">💧</div>' +
+      '<h2>Splash break!</h2>' +
+      '<p>That’s ' + n + ' games today — you’re on fire! 🔥<br>' +
+      'How about a little stretch and a glass of water?<br>' +
+      'Your high scores will wait for you. 💛</p>' +
+      '<button class="btn">💪 Good idea!</button>' +
+      '</div>';
+    document.body.appendChild(back);
+    sounds.chime(2);
+    const close = () => back.remove();
+    back.querySelector('button').addEventListener('click', close);
+    back.addEventListener('click', (e) => { if (e.target === back) close(); });
+  }
+
+  return { tone, sounds, muteButton, shake, overlay, countGame };
 })();

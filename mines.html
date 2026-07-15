@@ -170,6 +170,7 @@
     FX.shake(wrapEl);
     FX.sounds.blast();
     setTimeout(FX.sounds.sad, 350);
+    FX.countGame();
     msgEl.textContent = '💥 Boom! Try again — pick a difficulty above.';
   }
 
@@ -183,6 +184,7 @@
     fx.confetti();
     fx.floatText(wrapEl.clientWidth / 2, wrapEl.clientHeight / 2, '🎉 ' + seconds + 's!', 28);
     FX.sounds.fanfare();
+    FX.countGame();
     msgEl.textContent = '🎉 Bravo Maria! Cleared in ' + seconds + 's!';
   }
 
