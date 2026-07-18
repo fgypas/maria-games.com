@@ -136,6 +136,7 @@
   </div>
   <div id="message"></div>
   <p class="controls-hint">Reach the goal before your moves run out — each level asks for more!<br>
+  Finish with moves to spare and they 🎁 carry over to the next level.<br>
   Match <b>4</b> to forge a ✨ striped gem (blasts its row + column when matched).<br>
   Match <b>5</b> to forge a 🌈 rainbow gem (swap it with any gem to clear that whole colour).<br>
   🪨 Stones can't move or match — crush them with a match right next to them, or blast them.<br>
@@ -553,8 +554,10 @@
 
   function levelUp() {
     levelScore = Math.max(0, levelScore - goal());
+    // Finish a level early and the spare moves travel with you
+    const carried = moves;
     level++;
-    moves = movesForLevel();
+    moves = movesForLevel() + carried;
     // The new level drops some stones in your way
     let toPlace = Math.min(1 + level, 7), guard = 300;
     while (toPlace > 0 && guard--) {
@@ -568,7 +571,11 @@
     msgEl.classList.remove('big');
     void msgEl.offsetWidth;
     msgEl.classList.add('big');
-    msgEl.textContent = '🏆 Level ' + level + '! Goal: ' + goal() + ' points in ' + moves + ' moves.';
+    msgEl.textContent = '🏆 Level ' + level + '! Goal: ' + goal() + ' points in ' + moves + ' moves' +
+      (carried > 0 ? ' — 🎁 ' + carried + ' spare move' + (carried > 1 ? 's' : '') + ' carried over!' : '.');
+    if (carried > 0) {
+      floatText(wrapEl.clientWidth / 2, wrapEl.clientHeight / 2, '🎁 +' + carried + ' moves!', 26);
+    }
     updateHud();
   }
 
