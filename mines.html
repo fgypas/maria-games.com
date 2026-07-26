@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Minesweeper — Maria's Games</title>
+<meta name="description" content="Play Minesweeper free online in three sizes. First tap always safe, flag mode for phones, timer and mine counter. A pure logic classic.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💣</text></svg>">
 <link rel="stylesheet" href="style.css">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5441764367815214"
@@ -65,8 +66,31 @@
   <div id="message"></div>
   <p class="controls-hint">Tap to reveal, right-click to flag a mine.<br>
   On the phone, switch on 🚩 Flag mode to place flags by tapping. First tap is always safe.</p>
+  <section class="game-info">
+    <h2>How to play Minesweeper</h2>
+    <p>Somewhere under this field lie hidden mines. Reveal a square and it shows a number:
+    how many mines touch that square, counting all eight neighbours. Use those numbers to
+    deduce where the mines are, plant a 🚩 flag on each one, and reveal every safe square
+    to win. Reveal a mine instead and… well, you'll hear it.</p>
+    <p>Your <b>first tap is always safe</b> — the mines are placed only after it, never on
+    or next to your starting square, so every game opens with a fair foothold. Revealing a
+    zero automatically opens its whole neighbourhood. Three sizes are offered: Easy
+    (9×9, 10 mines), Medium (12×12, 24) and Hard (16×16, 44), with a timer if you like
+    racing yourself.</p>
+    <h3>Reading the numbers like a pro</h3>
+    <ul>
+      <li>If a number already touches exactly that many flags, every other neighbour is
+      safe to open.</li>
+      <li>If a number's count of unrevealed neighbours equals the number itself, they are
+      <b>all</b> mines — flag them.</li>
+      <li>The classic <b>1-2-1</b> pattern along a wall means the mines sit under the 1s;
+      a <b>1-2-2-1</b> puts them under the 2s.</li>
+      <li>Guessing is a last resort: open ground far from numbers first, and save coin-flip
+      squares for when nothing else remains.</li>
+    </ul>
+  </section>
 </main>
-<footer class="site">Made for Maria ❤️</footer>
+<footer class="site">Made for Maria ❤️ · <a href="about.html">About</a> · <a href="privacy.html">Privacy</a></footer>
 <script src="fx.js"></script>
 <script>
 (function () {

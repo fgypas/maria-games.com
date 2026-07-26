@@ -178,3 +178,24 @@ footer.site {
   font-size: 0.85rem;
   text-align: center;
 }
+
+footer.site a { color: var(--accent-dark); text-decoration: none; }
+footer.site a:hover { text-decoration: underline; }
+
+/* Text content sections (game guides, about, privacy) */
+.game-info {
+  max-width: 640px;
+  width: 100%;
+  margin-top: 28px;
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 24px 28px;
+  line-height: 1.65;
+}
+.game-info h2 { margin-bottom: 10px; font-size: 1.2rem; }
+.game-info h3 { margin: 16px 0 6px; font-size: 1.05rem; }
+.game-info p { margin-bottom: 10px; color: #6b5d4f; }
+.game-info ul { margin: 0 0 10px 20px; color: #6b5d4f; }
+.game-info li { margin-bottom: 6px; }
+.game-info a { color: var(--accent-dark); }
