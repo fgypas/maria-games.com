@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://maria-games.com/sitemap.xml

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://maria-games.com/</loc></url>
-  <url><loc>https://maria-games.com/sudoku.html</loc></url>
-  <url><loc>https://maria-games.com/2048.html</loc></url>
-  <url><loc>https://maria-games.com/blocks.html</loc></url>
-  <url><loc>https://maria-games.com/block-gems.html</loc></url>
-  <url><loc>https://maria-games.com/gems.html</loc></url>
-  <url><loc>https://maria-games.com/mines.html</loc></url>
-  <url><loc>https://maria-games.com/snake.html</loc></url>
-  <url><loc>https://maria-games.com/about.html</loc></url>
-  <url><loc>https://maria-games.com/privacy.html</loc></url>
+  <url><loc>https://maria-games.com/</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/sudoku.html</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/2048.html</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/blocks.html</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/block-gems.html</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/gems.html</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/mines.html</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/snake.html</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/about.html</loc><lastmod>2026-09-19</lastmod></url>
+  <url><loc>https://maria-games.com/privacy.html</loc><lastmod>2026-09-19</lastmod></url>
 </urlset>
